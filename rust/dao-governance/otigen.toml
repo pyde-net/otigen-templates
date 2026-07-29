@@ -1,0 +1,207 @@
+# `dao-governance` — minimal proposal-and-vote DAO contract manifest.
+#
+# Exercises the `pyde::call::execute<T, CallError>` cross-call wrapper
+# end-to-end: members propose target/function/calldata payloads,
+# vote within a deadline, and any caller can execute a passed
+# proposal — which cross-calls the target contract with the
+# original payload. The DAO's chain frame surfaces the cross-call's
+# typed failure mode in the receipt's return data so callers see
+# *why* the execution failed (target reverted, function name miss,
+# decode error, etc.) without losing the on-chain audit trail.
+
+[contract]
+name        = "pyde-template"
+version     = "0.1.0"
+description = "Proposal-and-vote DAO. Exercises pyde::call::execute for executing on-passed proposals."
+type        = "contract"
+
+[contract.lang]
+language = "rust"
+output   = "target/wasm32-unknown-unknown/release/pyde_template.wasm"
+
+[contract.lang.toolchain]
+rust_channel = "stable"
+
+[deploy]
+gas_limit = 80_000_000
+gas_price = "auto"
+
+[network.default]
+name = "devnet"
+
+[network.devnet]
+rpc_url  = "http://127.0.0.1:9933"
+chain_id = 31337
+
+# ─────────────────────────────────────────────────────────────────────
+# State schema
+# ─────────────────────────────────────────────────────────────────────
+
+[state]
+schema = [
+    { name = "voting_period_secs", type = "uint64" },
+    { name = "quorum_percent",     type = "uint64" },
+    { name = "member_count",       type = "uint64" },
+    { name = "proposal_count",     type = "uint64" },
+
+    { name = "members",            type = "map", keys = ["address"], value = "bool" },
+
+    # `joined_at[member]` = wave_timestamp at which `member` was
+    # added. Used by `vote()` to block late joiners from voting on
+    # proposals that existed before they were added.
+    { name = "joined_at",          type = "map", keys = ["address"], value = "uint64" },
+
+    { name = "proposal_target",    type = "map", keys = ["uint64"], value = "address" },
+    { name = "proposal_function",  type = "map", keys = ["uint64"], value = "string" },
+    { name = "proposal_calldata",  type = "map", keys = ["uint64"], value = "bytes" },
+    { name = "proposal_proposer",  type = "map", keys = ["uint64"], value = "address" },
+    { name = "proposal_created",   type = "map", keys = ["uint64"], value = "uint64" },
+    { name = "proposal_yes",       type = "map", keys = ["uint64"], value = "uint64" },
+    { name = "proposal_no",        type = "map", keys = ["uint64"], value = "uint64" },
+    { name = "proposal_executed",  type = "map", keys = ["uint64"], value = "bool" },
+    # Snapshot of `member_count` at proposal-creation time. Used as
+    # the quorum denominator in `execute_proposal` so adds/removes
+    # between propose and execute don't shift the threshold.
+    { name = "proposal_member_count_snapshot", type = "map", keys = ["uint64"], value = "uint64" },
+
+    { name = "has_voted",          type = "map", keys = ["uint64", "address"], value = "bool" },
+]
+
+# ─────────────────────────────────────────────────────────────────────
+# Functions
+# ─────────────────────────────────────────────────────────────────────
+
+[functions.init]
+attributes = ["constructor"]
+inputs     = ["vec(address)", "uint64", "uint64"]
+outputs    = []
+
+[functions.propose]
+attributes = ["entry"]
+inputs     = ["address", "string", "bytes"]
+outputs    = ["uint64"]
+
+[functions.vote]
+attributes = ["entry"]
+inputs     = ["uint64", "bool"]
+outputs    = []
+
+[functions.execute_proposal]
+attributes = ["entry"]
+inputs     = ["uint64"]
+outputs    = ["bool"]
+
+# Self-call only — invoked via a successful `execute_proposal` that
+# targets the DAO itself. Direct member calls revert with
+# `dao: membership changes require a passed proposal`.
+[functions.add_member]
+attributes = ["entry"]
+inputs     = ["address"]
+outputs    = []
+
+# Self-call only (same gating as `add_member`). Used to revoke a
+# compromised key or eject a misbehaving member via the proposal flow.
+[functions.remove_member]
+attributes = ["entry"]
+inputs     = ["address"]
+outputs    = []
+
+[functions.is_member]
+attributes = ["entry", "view"]
+inputs     = ["address"]
+outputs    = ["bool"]
+
+[functions.member_count]
+attributes = ["entry", "view"]
+inputs     = []
+outputs    = ["uint64"]
+
+[functions.proposal_count]
+attributes = ["entry", "view"]
+inputs     = []
+outputs    = ["uint64"]
+
+[functions.get_proposal_yes]
+attributes = ["entry", "view"]
+inputs     = ["uint64"]
+outputs    = ["uint64"]
+
+[functions.get_proposal_no]
+attributes = ["entry", "view"]
+inputs     = ["uint64"]
+outputs    = ["uint64"]
+
+[functions.get_proposal_executed]
+attributes = ["entry", "view"]
+inputs     = ["uint64"]
+outputs    = ["bool"]
+
+[functions.has_voted_on]
+attributes = ["entry", "view"]
+inputs     = ["uint64", "address"]
+outputs    = ["bool"]
+
+[functions.voting_period_secs]
+attributes = ["entry", "view"]
+inputs     = []
+outputs    = ["uint64"]
+
+# ─────────────────────────────────────────────────────────────────────
+# Events
+# ─────────────────────────────────────────────────────────────────────
+
+[events.MemberAdded]
+signature = "MemberAdded(address)"
+fields = [
+    { name = "member", type = "address", indexed = true },
+]
+
+[events.MemberRemoved]
+signature = "MemberRemoved(address)"
+fields = [
+    { name = "member", type = "address", indexed = true },
+]
+
+[events.ProposalCreated]
+signature = "ProposalCreated(uint64,address,address)"
+fields = [
+    { name = "proposal_id", type = "uint64",  indexed = true },
+    { name = "proposer",    type = "address", indexed = true },
+    { name = "target",      type = "address", indexed = true },
+]
+
+[events.Voted]
+signature = "Voted(uint64,address,bool)"
+fields = [
+    { name = "proposal_id", type = "uint64",  indexed = true },
+    { name = "voter",       type = "address", indexed = true },
+    { name = "support",     type = "bool" },
+]
+
+[events.ProposalExecuted]
+signature = "ProposalExecuted(uint64,bool)"
+fields = [
+    { name = "proposal_id", type = "uint64", indexed = true },
+    { name = "success",     type = "bool" },
+]
+
+# ─────────────────────────────────────────────────────────────────────
+# Optional: [metadata] — public info surfaced by explorers, wallets, and
+# `otigen inspect`. Every field is optional; uncomment what you want.
+# The values below show each field's accepted shape and validate as-is.
+#
+# [metadata]
+# name              = "my-contract"                       # display name, lowercase [a-z0-9-] (may differ from contract.name)
+# description       = "One-line summary of what this contract does."   # < 1000 chars
+# website           = "https://example.com"               # https:// URL
+# logo_url          = "https://example.com/logo.png"      # https:// URL
+# repository_url    = "https://github.com/pyde-net/example"  # https:// URL
+# documentation_url = "https://docs.example.com"          # https:// URL
+# license           = "MIT"                               # SPDX id: MIT, Apache-2.0, GPL-3.0-only, BUSL-1.1, … (SPDX_IDENTIFIERS)
+# authors           = ["Ada Lovelace <ada@example.com>"]  # "Name <email>" strings, ≤ 32 entries
+# tags              = ["defi", "example"]                 # slugs [a-z0-9-], ≤ 32 entries
+# declared_category = "app"                               # token|nft|dao|dex|lending|vault|oracle|bridge|multisig|staking|proxy|escrow|launchpad|registry|marketplace|payment|insurance|game|cred|rwa|app
+# twitter           = "https://x.com/pydenet"             # full URL, or bare handle "pydenet" (no @, [A-Za-z0-9_] ≤ 15)
+# github            = "https://github.com/pyde-net"        # full URL, or bare org/user handle "pyde-net"
+# telegram          = "https://t.me/pydenet"               # full URL, or bare channel handle "pydenet"
+# discord           = "https://discord.gg/pydenet"         # full URL, or bare server handle

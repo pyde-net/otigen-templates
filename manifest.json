@@ -1,47 +1,110 @@
 {
-  "schema": 1,
+  "schema": 2,
   "sentinel": { "kebab": "pyde-template", "snake": "pyde_template" },
-  "sdk": { "go": "v0.1.0-alpha.10" },
+  "sdk": {
+    "go": "v0.1.0-alpha.12",
+    "rust": "0.1.0-alpha.9",
+    "assemblyscript": "0.1.0-alpha.9"
+  },
   "templates": [
     {
       "id": "counter",
       "name": "Counter",
       "short": "Minimal counter",
       "description": "Minimal viable contract — a single u64 counter (otigen init equivalent).",
+      "kind": "source",
       "standard": null,
-      "langs": ["go"]
+      "langs": ["rust", "go", "assemblyscript", "c"]
+    },
+    {
+      "id": "token",
+      "name": "Fungible token",
+      "short": "Fungible token",
+      "description": "Fungible token (PTS-F, pts-f/1) — config-only: edit otigen.toml, otigen build generates the rest.",
+      "kind": "standard",
+      "standard": "pts-f/1",
+      "langs": ["rust", "go", "assemblyscript", "c"]
+    },
+    {
+      "id": "nft",
+      "name": "NFT collection",
+      "short": "NFT collection",
+      "description": "NFT collection (PTS-N, pts-n/1) — config-only: edit otigen.toml, otigen build generates the rest.",
+      "kind": "standard",
+      "standard": "pts-n/1",
+      "langs": ["rust", "go", "assemblyscript", "c"]
     },
     {
       "id": "fungible-token",
-      "name": "Fungible token",
+      "name": "Fungible token (source)",
       "short": "Fungible source",
-      "description": "A fungible token in Go — balances, allowances, and owner-gated minting.",
+      "description": "PTS-F reference token (pts-f/1): expiring allowances, settle-then-notify transfer_call, role-gated supply.",
+      "kind": "source",
       "standard": null,
-      "langs": ["go"]
+      "langs": ["rust", "go"]
     },
     {
-      "id": "factory",
-      "name": "Factory",
-      "short": "Factory",
-      "description": "Mints child contracts (auto / u64 / string salts) and drives them by key, name, or address.",
+      "id": "nft-token",
+      "name": "NFT collection (source)",
+      "short": "NFT source",
+      "description": "PTS-N reference NFT (pts-n/1): per-id owners, settle-then-notify transfer_call, on-chain token URIs.",
+      "kind": "source",
       "standard": null,
-      "langs": ["go"]
+      "langs": ["rust", "go"]
     },
     {
-      "id": "merkle-claim-airdrop",
-      "name": "Merkle airdrop",
-      "short": "Merkle airdrop",
-      "description": "A Merkle-tree airdrop — off-chain commitment, on-chain proof-of-inclusion claims.",
+      "id": "simple-multisig",
+      "name": "Multisig",
+      "short": "Multisig",
+      "description": "3-signer FALCON-512 multisig. Demonstrates falcon_verify + signer-ID lookup + replay protection.",
+      "kind": "source",
       "standard": null,
-      "langs": ["go"]
+      "langs": ["rust", "go"]
     },
     {
       "id": "upgradeable-proxy",
       "name": "Upgradeable proxy",
       "short": "Upgradeable proxy",
-      "description": "Admin-swappable logic via delegate-call, state preserved across upgrades.",
+      "description": "Upgradeable proxy via delegate_call. Admin-controlled implementation slot; state preserved across upgrades.",
+      "kind": "source",
       "standard": null,
-      "langs": ["go"]
+      "langs": ["rust", "go"]
+    },
+    {
+      "id": "merkle-claim-airdrop",
+      "name": "Merkle airdrop",
+      "short": "Merkle airdrop",
+      "description": "Merkle-tree airdrop claim. Off-chain commitment + on-chain inclusion verification via Blake3.",
+      "kind": "source",
+      "standard": null,
+      "langs": ["rust", "go"]
+    },
+    {
+      "id": "vesting",
+      "name": "Vesting",
+      "short": "Vesting",
+      "description": "Linear vesting with cliff. Time-locked allocation using wave_timestamp.",
+      "kind": "source",
+      "standard": null,
+      "langs": ["rust", "go"]
+    },
+    {
+      "id": "dao-governance",
+      "name": "DAO governance",
+      "short": "DAO governance",
+      "description": "Composed example. FALCON-signed votes + time phases + Blake3-committed execution.",
+      "kind": "source",
+      "standard": null,
+      "langs": ["rust", "go"]
+    },
+    {
+      "id": "factory",
+      "name": "Factory",
+      "short": "Factory",
+      "description": "Factory pattern: a contract that deploys child contracts of any template via pyde::instantiate.",
+      "kind": "source",
+      "standard": null,
+      "langs": ["rust", "go"]
     }
   ]
 }

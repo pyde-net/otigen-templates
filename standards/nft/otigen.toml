@@ -1,0 +1,50 @@
+# pyde-template — the CONFIG-ONLY pts-n/1 NFT collection.
+#
+# The zero-source counterpart to `examples/nft-token`: the author writes
+# only this manifest (`type = "token"`, `standard = "pts-n/1"`, a
+# `[token]` block) and `otigen build` GENERATES the full pts-n/1
+# contract, compiles it, and bundles it — no `src/`. The generated
+# surface is drift-pinned to `examples/nft-token` (the normative
+# reference), so this and the hand-written reference produce the
+# identical ABI (except the baked, arg-free `init`).
+#
+# NFTs have no fractional units and no genesis supply: the manifest
+# carries name/symbol and an optional max_supply (a token count);
+# `decimals` / `initial_supply` / `initial_holder` are pts-f-only and
+# rejected here. Deployer is minter + manager; tokens mint on demand.
+
+[contract]
+name     = "pyde-template"
+version  = "0.1.0"
+type     = "token"
+standard = "pts-n/1"
+
+[token]
+name   = "Config Demo Collection"
+symbol = "CFGN"
+# decimals / initial_supply / initial_holder are pts-f-only — an NFT has no
+# fractional units and no genesis supply, so they're rejected here.
+
+[token.supply]
+max_supply = "10000"                  # token-count cap; 0 or omit = uncapped
+# minter  = "deployer"                # who may mint: "deployer" (default) or a 0x… address
+# manager = "deployer"                # who may rotate roles / custody token URIs
+
+# ── Optional capabilities — spec'd (PIP-0005), codegen lands in a later
+#    increment. Uncommenting these today fails the build with a clear
+#    "not yet generated" message; shown so the full surface is visible. ──
+# [token.hooks]
+# transfer_call = false               # opt out of settle-then-notify deposits (default true)
+#
+# [token.extensions]
+# freeze       = true                 # per-account freeze/unfreeze (adds the freezer role)
+# pause        = true                 # global incident brake (adds the pauser role)
+# registration = "required"           # "open" (default) | "required" (opt-in receiving + native-quanta bond)
+# metadata_uri = "https://example.com/{id}.json"  # base token-URI (else per-token URIs)
+
+[network.default]
+name = "devnet"
+
+[network.devnet]
+rpc_url  = "http://127.0.0.1:9933"
+chain_id = 31337

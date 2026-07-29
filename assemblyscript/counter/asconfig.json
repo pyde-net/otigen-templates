@@ -1,0 +1,18 @@
+{
+  "targets": {
+    "release": {
+      "outFile": "build/contract.wasm",
+      "textFile": "build/contract.wat",
+      "optimizeLevel": 3,
+      "shrinkLevel": 2,
+      "converge": false,
+      "noAssert": true,
+      "runtime": "stub",
+      "exportStart": false
+    }
+  },
+  "options": {
+    "bindings": "raw",
+    "use": ["abort=assembly/index/abort"]
+  }
+}

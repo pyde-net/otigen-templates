@@ -1,0 +1,134 @@
+# `upgradeable-proxy` — thin proxy that delegate-calls into a swappable
+# logic contract. Demonstrates the canonical upgradeable-contract
+# pattern: the proxy's storage outlives every logic version, so
+# upgrades preserve state.
+#
+# Three-contract setup for the e2e:
+#   1. `logic-v1` — counter shape (`add(n)`, `get`)
+#   2. `logic-v2` — same counter shape + a new `multiply(n)` entry
+#   3. `upgradeable-proxy` — admin-controlled pointer to the current
+#      logic; `forward(fn, calldata)` delegates into it.
+
+[contract]
+name        = "pyde-template"
+version     = "0.1.0"
+description = "Canonical Pyde example of pyde::call::execute_delegate — upgradeable proxy pattern."
+type        = "contract"
+
+[contract.lang]
+language = "rust"
+output   = "target/wasm32-unknown-unknown/release/pyde_template.wasm"
+
+[contract.lang.toolchain]
+rust_channel = "stable"
+
+[deploy]
+gas_limit = 50_000_000
+gas_price = "auto"
+
+[network.default]
+name = "devnet"
+
+[network.devnet]
+rpc_url  = "http://127.0.0.1:9933"
+chain_id = 31337
+
+# Privileged proxy slots use the `proxy_` prefix so a logic contract
+# that happens to declare a field named `admin` or `logic` writes
+# to a different slot than the proxy's gating state. `value` stays
+# unprefixed — it's the intentionally-shared demonstration field.
+[state]
+schema = [
+    { name = "proxy_admin", type = "address" },
+    { name = "proxy_logic", type = "address" },
+    { name = "value",       type = "uint64" },
+]
+
+[functions.init]
+attributes = ["constructor"]
+inputs     = ["address"]
+outputs    = []
+
+[functions.upgrade_to]
+attributes = ["entry"]
+inputs     = ["address"]
+outputs    = []
+
+# Rotate the admin role. Admin-only. Reverts on zero-address new
+# admin — use `renounce_admin` for that path so the irrevocable
+# lock is loud rather than disguised as a transfer.
+[functions.transfer_admin]
+attributes = ["entry"]
+inputs     = ["address"]
+outputs    = []
+
+# Renounce the admin role (admin = zero). Locks the logic pointer
+# forever; the contract becomes non-upgradeable. Irreversible.
+[functions.renounce_admin]
+attributes = ["entry"]
+inputs     = []
+outputs    = []
+
+[functions.forward]
+attributes = ["entry"]
+inputs     = ["string", "bytes"]
+outputs    = ["bytes"]
+
+[functions.get_admin]
+attributes = ["entry", "view"]
+inputs     = []
+outputs    = ["address"]
+
+[functions.get_logic]
+attributes = ["entry", "view"]
+inputs     = []
+outputs    = ["address"]
+
+[functions.get_value]
+attributes = ["entry", "view"]
+inputs     = []
+outputs    = ["uint64"]
+
+[events.Initialized]
+signature = "Initialized(address,address)"
+fields = [
+    { name = "admin",         type = "address", indexed = true },
+    { name = "initial_logic", type = "address", indexed = true },
+]
+
+[events.Upgraded]
+signature = "Upgraded(address,address)"
+fields = [
+    { name = "old_logic", type = "address", indexed = true },
+    { name = "new_logic", type = "address", indexed = true },
+]
+
+# Emitted by `transfer_admin` AND `renounce_admin` (with
+# `new_admin = ZERO_ADDRESS` for the latter).
+[events.AdminTransferred]
+signature = "AdminTransferred(address,address)"
+fields = [
+    { name = "old_admin", type = "address", indexed = true },
+    { name = "new_admin", type = "address", indexed = true },
+]
+
+# ─────────────────────────────────────────────────────────────────────
+# Optional: [metadata] — public info surfaced by explorers, wallets, and
+# `otigen inspect`. Every field is optional; uncomment what you want.
+# The values below show each field's accepted shape and validate as-is.
+#
+# [metadata]
+# name              = "my-contract"                       # display name, lowercase [a-z0-9-] (may differ from contract.name)
+# description       = "One-line summary of what this contract does."   # < 1000 chars
+# website           = "https://example.com"               # https:// URL
+# logo_url          = "https://example.com/logo.png"      # https:// URL
+# repository_url    = "https://github.com/pyde-net/example"  # https:// URL
+# documentation_url = "https://docs.example.com"          # https:// URL
+# license           = "MIT"                               # SPDX id: MIT, Apache-2.0, GPL-3.0-only, BUSL-1.1, … (SPDX_IDENTIFIERS)
+# authors           = ["Ada Lovelace <ada@example.com>"]  # "Name <email>" strings, ≤ 32 entries
+# tags              = ["defi", "example"]                 # slugs [a-z0-9-], ≤ 32 entries
+# declared_category = "app"                               # token|nft|dao|dex|lending|vault|oracle|bridge|multisig|staking|proxy|escrow|launchpad|registry|marketplace|payment|insurance|game|cred|rwa|app
+# twitter           = "https://x.com/pydenet"             # full URL, or bare handle "pydenet" (no @, [A-Za-z0-9_] ≤ 15)
+# github            = "https://github.com/pyde-net"        # full URL, or bare org/user handle "pyde-net"
+# telegram          = "https://t.me/pydenet"               # full URL, or bare channel handle "pydenet"
+# discord           = "https://discord.gg/pydenet"         # full URL, or bare server handle

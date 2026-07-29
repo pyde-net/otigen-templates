@@ -1,40 +1,49 @@
 # otigen-templates
 
-Starter templates for [Pyde](https://pyde.network) contracts, organised by
-language. `otigen new <name> --lang <lang> --from <template>` clones the
-matching directory here and substitutes the project name — templates are hosted
-(not baked into the `otigen` binary) so they can be updated without a CLI
-release.
+Starter templates for [Pyde](https://pyde.network) contracts, hosted here (not
+baked into the `otigen` binary) so they can be updated without a CLI release.
+`otigen new <name> --lang <lang> --from <template>` clones the matching
+directory and substitutes the project name.
 
 ## Layout
 
 ```
-<lang>/<template>/     e.g. go/fungible-token/
-manifest.json         catalog: sentinel, SDK pins, template list
+<lang>/<template>/      source templates — rust/, go/, assemblyscript/, c/
+standards/<id>/         config-only "form" tokens (pts-f/1, pts-n/1) — language-immaterial
+manifest.json           catalog: sentinel, SDK pins, template list (drives the picker)
 ```
 
 ## Sentinel substitution
 
-Every template is authored against a placeholder name that `otigen new` rewrites
-to the user's project name:
+Every template is authored against a placeholder name that `otigen new`
+rewrites to the user's project name:
 
-| sentinel        | rewritten to        | appears in            |
-| --------------- | ------------------- | --------------------- |
-| `pyde-template` | `<name>` (kebab)    | `otigen.toml` name    |
-| `pyde_template` | `<name>` (snake)    | `go.mod` module path  |
+| sentinel        | rewritten to     | appears in                       |
+| --------------- | ---------------- | -------------------------------- |
+| `pyde-template` | `<name>` (kebab) | `otigen.toml` name, Makefile     |
+| `pyde_template` | `<name>` (snake) | `Cargo.toml`/`go.mod` crate name |
 
-## Go templates
+## Templates
 
-| template               | what it shows                                             |
-| ---------------------- | --------------------------------------------------------- |
-| `counter`              | minimal contract — one u64 scalar                         |
-| `fungible-token`       | balances (map1), allowances (map2), events, owner-gating  |
-| `factory`              | `pyde.New(...)` child instantiation + cross-calls         |
-| `merkle-claim-airdrop` | off-chain Merkle commitment, on-chain proof-of-inclusion  |
-| `upgradeable-proxy`    | delegate-call proxy, state preserved across upgrades      |
+| template               | rust | go | as | c | what it shows                                            |
+| ---------------------- | :--: | :-: | :-: | :-: | ------------------------------------------------------ |
+| `counter`              |  ✓   | ✓  | ✓  | ✓ | minimal contract — one u64 scalar                       |
+| `fungible-token`       |  ✓   | ✓  |    |   | balances, allowances, transfer_call, role-gated supply  |
+| `nft-token`            |  ✓   | ✓  |    |   | per-id owners, transfer_call, on-chain token URIs       |
+| `simple-multisig`      |  ✓   | ✓  |    |   | FALCON-512 verify + replay protection                   |
+| `upgradeable-proxy`    |  ✓   | ✓  |    |   | delegate-call proxy, state preserved across upgrades    |
+| `merkle-claim-airdrop` |  ✓   | ✓  |    |   | off-chain commitment, on-chain proof-of-inclusion       |
+| `vesting`              |  ✓   | ✓  |    |   | linear vesting with cliff (wave_timestamp)              |
+| `dao-governance`       |  ✓   | ✓  |    |   | FALCON-signed votes + time phases + committed execution |
+| `factory`              |  ✓   | ✓  |    |   | deploys child contracts via instantiate                 |
+| `standards/token`      | config-only |||| PTS-F fungible token — edit otigen.toml, build generates it |
+| `standards/nft`        | config-only |||| PTS-N NFT collection — edit otigen.toml, build generates it |
 
-Each Go template pins the published SDK (`github.com/pyde-net/pyde-host/go`),
-ships its generated `pyde_gen.go`, and builds with `otigen build`.
+The Rust and Go source templates are line-by-line equivalent — same logic, same
+tests (the `tests/contract.test.toml` vectors are shared and pass in both).
+
+SDK pins: Rust `pyde-host` from crates.io, Go `github.com/pyde-net/pyde-host/go`,
+AS `@pyde-net/host` — versions in `manifest.json`.
 
 ## Local development
 

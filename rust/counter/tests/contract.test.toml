@@ -1,0 +1,64 @@
+# Behaviour tests for the scaffolded counter contract.
+#
+# Run with:  make test          (default verbosity)
+# Or:        make test-vvvv     (full traces + storage diffs)
+#
+# Spec: https://book.pyde.network/companion/OTIGEN_TEST_SPEC
+
+# Optional named accounts (used as `from = "alice"`). Resolved to
+# 32-byte addresses via Blake3(name).
+[accounts]
+alice = {}
+
+# Global cheats — apply to every test unless overridden under
+# [tests.cheats].
+[cheats]
+now      = 1_700_000_000
+chain_id = 31337
+
+# ── Test 1: a fresh contract reads zero ───────────────────────────────
+[[tests]]
+name = "get_returns_zero_initially"
+
+[[tests.calls]]
+function = "get"
+expect.return_value = "0"
+
+# ── Test 2: one increment advances the counter ────────────────────────
+[[tests]]
+name = "increment_advances_by_one"
+
+[[tests.calls]]
+function = "increment"
+from     = "alice"
+expect.return_value = "1"
+# Foundry-style regression guard: fail the test if a future refactor
+# pushes `increment` past 250k gas. Adjust the ceiling deliberately
+# if a change is intentional.
+expect.gas_max      = "250000"
+
+[[tests.calls]]
+function = "get"
+expect.return_value = "1"
+
+# ── Test 3: three increments accumulate; storage persists across calls
+[[tests]]
+name = "three_increments_yield_three"
+
+[[tests.calls]]
+function = "increment"
+
+[[tests.calls]]
+function = "increment"
+
+[[tests.calls]]
+function = "increment"
+expect.return_value = "3"
+
+# Final-state assertion on the storage slot. The framework resolves
+# `counter` to its Poseidon2-derived slot and compares the raw stored
+# bytes. The contract stores `u64::to_be_bytes(3)` = 8 bytes; the
+# test framework's decimal encoder produces 16-byte u128 BE, so we
+# pass the exact 8-byte hex to match what the contract actually wrote.
+[tests.expect]
+storage.counter = "3"

@@ -1,0 +1,84 @@
+# `counter-rust` — Pyde contract manifest. See:
+#   https://book.pyde.network/companion/OTIGEN_BINARY_SPEC
+
+[contract]
+name        = "pyde-template"
+version     = "0.1.0"
+description = "A minimal Pyde contract scaffolded by `otigen init`."
+type        = "contract"
+
+[contract.lang]
+# Where the Rust toolchain writes the WASM. `otigen build` reads
+# this path; if it doesn't exist, the build fails with a clear
+# message rather than silently producing an empty bundle.
+language = "rust"
+output   = "target/wasm32-unknown-unknown/release/pyde_template.wasm"
+
+[contract.lang.toolchain]
+# Recorded in the bundle manifest for reproducibility. `otigen build`
+# does NOT enforce this — pin it for your team.
+rust_channel = "stable"
+
+[deploy]
+# Submitted with the deploy tx. `auto` lets the wallet read the
+# current EIP-1559 base fee from the network.
+gas_limit = 10_000_000
+gas_price = "auto"
+
+[network.default]
+# Network used when no `--network` flag is passed.
+name = "devnet"
+
+[network.devnet]
+rpc_url  = "http://127.0.0.1:9933"
+chain_id = 31337
+
+# Optional: [paths] overrides project layout (Foundry-style). Every key
+# has a sensible default; the table is only needed when you diverge
+# from the conventional layout. Uncomment + edit individual keys.
+#
+# [paths]
+# src       = "src"
+# tests     = "tests"
+# target    = "target"
+# artifacts = "artifacts"
+
+[state]
+# Storage fields the contract uses. The `otigen test` resolver
+# computes `Poseidon2(contract_addr || field_name)` for each entry
+# so test assertions and contract reads/writes converge on the same
+# JMT slot.
+schema = [
+    { name = "counter", type = "uint64" },
+]
+
+[functions.increment]
+attributes = ["entry"]
+inputs     = []
+outputs    = ["uint64"]
+
+[functions.get]
+attributes = ["entry", "view"]
+inputs     = []
+outputs    = ["uint64"]
+
+# ─────────────────────────────────────────────────────────────────────
+# Optional: [metadata] — public info surfaced by explorers, wallets, and
+# `otigen inspect`. Every field is optional; uncomment what you want.
+# The values below show each field's accepted shape and validate as-is.
+#
+# [metadata]
+# name              = "my-contract"                       # display name, lowercase [a-z0-9-] (may differ from contract.name)
+# description       = "One-line summary of what this contract does."   # < 1000 chars
+# website           = "https://example.com"               # https:// URL
+# logo_url          = "https://example.com/logo.png"      # https:// URL
+# repository_url    = "https://github.com/pyde-net/example"  # https:// URL
+# documentation_url = "https://docs.example.com"          # https:// URL
+# license           = "MIT"                               # SPDX id: MIT, Apache-2.0, GPL-3.0-only, BUSL-1.1, … (SPDX_IDENTIFIERS)
+# authors           = ["Ada Lovelace <ada@example.com>"]  # "Name <email>" strings, ≤ 32 entries
+# tags              = ["defi", "example"]                 # slugs [a-z0-9-], ≤ 32 entries
+# declared_category = "app"                               # token|nft|dao|dex|lending|vault|oracle|bridge|multisig|staking|proxy|escrow|launchpad|registry|marketplace|payment|insurance|game|cred|rwa|app
+# twitter           = "https://x.com/pydenet"             # full URL, or bare handle "pydenet" (no @, [A-Za-z0-9_] ≤ 15)
+# github            = "https://github.com/pyde-net"        # full URL, or bare org/user handle "pyde-net"
+# telegram          = "https://t.me/pydenet"               # full URL, or bare channel handle "pydenet"
+# discord           = "https://discord.gg/pydenet"         # full URL, or bare server handle

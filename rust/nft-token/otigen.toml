@@ -1,0 +1,265 @@
+# nft-token — the PTS-N reference implementation
+#
+# Hand-written reference for the `pts-n/1` non-fungible surface
+# (PIP-0005 §12), default configuration. When `type = "token"`
+# manifest generation lands in otigen, this contract is what the
+# generator emits for `standard = "pts-n/1"` — until then it is the
+# normative reference and the conformance-vector source.
+#
+# Deliberate exclusions carried from the spec: NO royalties (an
+# interface cannot enforce economics against adversarial
+# marketplaces) and NO fused fungible/NFT hybrid. Honest v1 cost:
+# sequential id minting is a hot slot that serializes mass mints; a
+# pre-partitioned id-range extension is sketched for pts-n/2.
+
+[contract]
+name        = "pyde-template"
+version     = "0.1.0"
+description = "PTS-N reference NFT (pts-n/1): per-id owners, settle-then-notify transfer_call, on-chain token URIs, role-gated mint."
+type        = "contract"
+
+[contract.lang]
+language = "rust"
+output   = "target/wasm32-unknown-unknown/release/pyde_template.wasm"
+
+[contract.lang.toolchain]
+rust_channel = "stable"
+
+[deploy]
+gas_limit = 50_000_000
+gas_price = "auto"
+
+[network.default]
+name = "devnet"
+
+[network.devnet]
+rpc_url  = "http://127.0.0.1:9933"
+chain_id = 31337
+
+# ─────────────────────────────────────────────────────────────────────
+# State schema
+# ─────────────────────────────────────────────────────────────────────
+#
+# Per-id owner slots: transfers of distinct ids never conflict under
+# Block-STM. `next_id` is monotonic and separate from `total_supply`
+# (the live count) so burned ids are never recycled. token_id 0 is
+# reserved (mint starts at 1) — a zero-address read on `owners` is
+# unambiguous "nonexistent".
+
+[state]
+schema = [
+    { name = "token_name",   type = "string" },
+    { name = "token_symbol", type = "string" },
+    { name = "total_supply", type = "uint64" },
+    { name = "max_supply",   type = "uint64" },
+    { name = "next_id",      type = "uint64" },
+
+    { name = "minter",  type = "address" },
+    { name = "manager", type = "address" },
+
+    { name = "owners",             type = "map", keys = ["uint64"],             value = "address" },
+    { name = "balances",           type = "map", keys = ["address"],            value = "uint64" },
+    { name = "token_approvals",    type = "map", keys = ["uint64"],             value = "address" },
+    { name = "operator_approvals", type = "map", keys = ["address", "address"], value = "bool" },
+    { name = "token_uris",         type = "map", keys = ["uint64"],             value = "string" },
+]
+
+# ─────────────────────────────────────────────────────────────────────
+# Entry points — the pts-n/1 surface (PIP-0005 §12)
+# ─────────────────────────────────────────────────────────────────────
+#
+# Conventions: mutations return nothing (mint returns the fresh id —
+# a creation, not a status); failures are canonical `token:*` codes;
+# no function is payable; storage writes zero rather than deleting.
+
+# Constructor: metadata + roles to the deployer. max_supply = 0 means
+# uncapped.
+[functions.init]
+attributes = ["entry", "constructor"]
+inputs     = ["string", "string", "uint64"]
+outputs    = []
+
+# ── views ────────────────────────────────────────────────────────────
+
+[functions.standard]
+attributes = ["entry", "view"]
+inputs     = []
+outputs    = ["string"]
+
+[functions.name]
+attributes = ["entry", "view"]
+inputs     = []
+outputs    = ["string"]
+
+[functions.symbol]
+attributes = ["entry", "view"]
+inputs     = []
+outputs    = ["string"]
+
+[functions.total_supply]
+attributes = ["entry", "view"]
+inputs     = []
+outputs    = ["uint64"]
+
+[functions.max_supply]
+attributes = ["entry", "view"]
+inputs     = []
+outputs    = ["uint64"]
+
+[functions.owner_of]
+attributes = ["entry", "view"]
+inputs     = ["uint64"]
+outputs    = ["address"]
+
+[functions.balance_of]
+attributes = ["entry", "view"]
+inputs     = ["address"]
+outputs    = ["uint64"]
+
+[functions.get_approved]
+attributes = ["entry", "view"]
+inputs     = ["uint64"]
+outputs    = ["address"]
+
+[functions.is_approved_for_all]
+attributes = ["entry", "view"]
+inputs     = ["address", "address"]
+outputs    = ["bool"]
+
+[functions.token_uri]
+attributes = ["entry", "view"]
+inputs     = ["uint64"]
+outputs    = ["string"]
+
+[functions.minter]
+attributes = ["entry", "view"]
+inputs     = []
+outputs    = ["address"]
+
+[functions.manager]
+attributes = ["entry", "view"]
+inputs     = []
+outputs    = ["address"]
+
+# ── transfers ────────────────────────────────────────────────────────
+
+# Caller must be the owner, the per-id approved address, or an
+# approved operator. Clears the per-id approval atomically (same
+# slot write — no extra conflict surface). Never invokes recipient
+# code.
+[functions.transfer_from]
+attributes = ["entry"]
+inputs     = ["address", "address", "uint64"]
+outputs    = []
+
+# Settle-then-notify: ownership fully moved and Transfer emitted
+# FIRST, then cross_call `on_nft_received(operator, from, id, data)`
+# on the recipient — which must return ACK_NFT or the whole operation
+# reverts `token:bad_receiver` and unwinds atomically.
+[functions.transfer_call]
+attributes = ["entry"]
+inputs     = ["address", "uint64", "vec(uint8)"]
+outputs    = ["uint32"]
+
+# ── approvals ────────────────────────────────────────────────────────
+
+# Per-id approval; the zero address clears it.
+[functions.approve]
+attributes = ["entry"]
+inputs     = ["address", "uint64"]
+outputs    = []
+
+[functions.set_approval_for_all]
+attributes = ["entry"]
+inputs     = ["address", "bool"]
+outputs    = []
+
+# ── supply & roles ───────────────────────────────────────────────────
+
+# Minter only. Returns the freshly-assigned id (monotonic; never
+# recycled). Metadata lives ON-CHAIN in token_uris — 16 KB storage
+# values make real metadata JSON viable, no off-chain rot required.
+[functions.mint]
+attributes = ["entry"]
+inputs     = ["address", "string"]
+outputs    = ["uint64"]
+
+# Owner or authorized. Ownership zeroed (never deleted), supply
+# decremented; the id is retired forever.
+[functions.burn]
+attributes = ["entry"]
+inputs     = ["uint64"]
+outputs    = []
+
+[functions.set_minter]
+attributes = ["entry"]
+inputs     = ["address"]
+outputs    = []
+
+[functions.set_manager]
+attributes = ["entry"]
+inputs     = ["address"]
+outputs    = []
+
+# ─────────────────────────────────────────────────────────────────────
+# Events (PIP-0005 §12)
+# ─────────────────────────────────────────────────────────────────────
+#
+# Transfer carries all three fields indexed — provenance and holdings
+# queries run straight off the events-by-topic index. Mint emits
+# from = zero-address, burn emits to = zero-address.
+
+[events.Transfer]
+signature = "Transfer(address,address,uint64)"
+fields = [
+    { name = "from",     type = "address", indexed = true },
+    { name = "to",       type = "address", indexed = true },
+    { name = "token_id", type = "uint64",  indexed = true },
+]
+
+[events.Approval]
+signature = "Approval(address,address,uint64)"
+fields = [
+    { name = "owner",    type = "address", indexed = true },
+    { name = "approved", type = "address", indexed = true },
+    { name = "token_id", type = "uint64",  indexed = true },
+]
+
+[events.ApprovalForAll]
+signature = "ApprovalForAll(address,address,bool)"
+fields = [
+    { name = "owner",    type = "address", indexed = true },
+    { name = "operator", type = "address", indexed = true },
+    { name = "approved", type = "bool" },
+]
+
+# role is a precomputed 32-byte identifier (Blake3 of the role name —
+# PIP-0005 §3). Renounce is publicly provable as holder = zero.
+[events.RoleTransfer]
+signature = "RoleTransfer(bytes32,address,address)"
+fields = [
+    { name = "role",     type = "bytes32", indexed = true },
+    { name = "holder",   type = "address", indexed = true },
+    { name = "previous", type = "address" },
+]
+
+# ─────────────────────────────────────────────────────────────────────
+# Optional: [metadata] — public info surfaced by explorers, wallets, and
+# `otigen inspect`. Every field is optional; uncomment what you want.
+# The values below show each field's accepted shape and validate as-is.
+#
+# [metadata]
+# name              = "my-contract"                       # display name, lowercase [a-z0-9-] (may differ from contract.name)
+# description       = "One-line summary of what this contract does."   # < 1000 chars
+# website           = "https://example.com"               # https:// URL
+# logo_url          = "https://example.com/logo.png"      # https:// URL
+# repository_url    = "https://github.com/pyde-net/example"  # https:// URL
+# documentation_url = "https://docs.example.com"          # https:// URL
+# license           = "MIT"                               # SPDX id: MIT, Apache-2.0, GPL-3.0-only, BUSL-1.1, … (SPDX_IDENTIFIERS)
+# authors           = ["Ada Lovelace <ada@example.com>"]  # "Name <email>" strings, ≤ 32 entries
+# tags              = ["defi", "example"]                 # slugs [a-z0-9-], ≤ 32 entries
+# declared_category = "app"                               # token|nft|dao|dex|lending|vault|oracle|bridge|multisig|staking|proxy|escrow|launchpad|registry|marketplace|payment|insurance|game|cred|rwa|app
+# twitter           = "https://x.com/pydenet"             # full URL, or bare handle "pydenet" (no @, [A-Za-z0-9_] ≤ 15)
+# github            = "https://github.com/pyde-net"        # full URL, or bare org/user handle "pyde-net"
+# telegram          = "https://t.me/pydenet"               # full URL, or bare channel handle "pydenet"
+# discord           = "https://discord.gg/pydenet"         # full URL, or bare server handle

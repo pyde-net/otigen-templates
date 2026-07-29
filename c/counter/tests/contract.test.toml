@@ -1,0 +1,52 @@
+# Behaviour tests for the scaffolded counter contract.
+#
+# Run with:  make test          (default verbosity)
+# Or:        make test-vvvv     (full traces + storage diffs)
+#
+# Spec: https://book.pyde.network/companion/OTIGEN_TEST_SPEC
+
+[accounts]
+alice = {}
+
+[cheats]
+now      = 1_700_000_000
+chain_id = 31337
+
+# ── Test 1: fresh contract reads zero ─────────────────────────────────
+[[tests]]
+name = "get_returns_zero_initially"
+
+[[tests.calls]]
+function = "get"
+expect.return_value = "0"
+
+# ── Test 2: one increment advances the counter ────────────────────────
+[[tests]]
+name = "increment_advances_by_one"
+
+[[tests.calls]]
+function = "increment"
+from     = "alice"
+expect.return_value = "1"
+expect.gas_max      = "250_000"
+
+[[tests.calls]]
+function = "get"
+expect.return_value = "1"
+
+# ── Test 3: three increments accumulate; storage persists ─────────────
+[[tests]]
+name = "three_increments_yield_three"
+
+[[tests.calls]]
+function = "increment"
+
+[[tests.calls]]
+function = "increment"
+
+[[tests.calls]]
+function = "increment"
+expect.return_value = "3"
+
+[tests.expect]
+storage.counter = "3"

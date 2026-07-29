@@ -1,0 +1,18 @@
+[package]
+name = "pyde_template"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+pyde-host = "0.1.0-alpha.9"
+borsh = { version = "1.5", default-features = false, features = ["derive"] }
+
+[lib]
+crate-type = ["cdylib"]
+
+[profile.release]
+opt-level     = "z"
+lto           = true
+codegen-units = 1
+strip         = true
+panic         = "abort"

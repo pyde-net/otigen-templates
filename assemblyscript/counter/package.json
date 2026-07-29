@@ -1,0 +1,15 @@
+{
+  "name": "pyde-template",
+  "version": "0.1.0",
+  "description": "A minimal Pyde contract scaffolded by `otigen init --lang as`.",
+  "private": true,
+  "scripts": {
+    "build": "asc assembly/index.ts --config asconfig.json --target release"
+  },
+  "dependencies": {
+    "@pyde-net/host": "0.1.0-alpha.9"
+  },
+  "devDependencies": {
+    "assemblyscript": "^0.28.0"
+  }
+}

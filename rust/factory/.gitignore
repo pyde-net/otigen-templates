@@ -1,0 +1,6 @@
+/target/
+/artifacts/
+/template/target/
+/template/artifacts/
+Cargo.lock
+.DS_Store
