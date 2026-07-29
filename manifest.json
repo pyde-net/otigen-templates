@@ -1,0 +1,47 @@
+{
+  "schema": 1,
+  "sentinel": { "kebab": "pyde-template", "snake": "pyde_template" },
+  "sdk": { "go": "v0.1.0-alpha.10" },
+  "templates": [
+    {
+      "id": "counter",
+      "name": "Counter",
+      "short": "Minimal counter",
+      "description": "Minimal viable contract — a single u64 counter (otigen init equivalent).",
+      "standard": null,
+      "langs": ["go"]
+    },
+    {
+      "id": "fungible-token",
+      "name": "Fungible token",
+      "short": "Fungible source",
+      "description": "A fungible token in Go — balances, allowances, and owner-gated minting.",
+      "standard": null,
+      "langs": ["go"]
+    },
+    {
+      "id": "factory",
+      "name": "Factory",
+      "short": "Factory",
+      "description": "Mints child contracts (auto / u64 / string salts) and drives them by key, name, or address.",
+      "standard": null,
+      "langs": ["go"]
+    },
+    {
+      "id": "merkle-claim-airdrop",
+      "name": "Merkle airdrop",
+      "short": "Merkle airdrop",
+      "description": "A Merkle-tree airdrop — off-chain commitment, on-chain proof-of-inclusion claims.",
+      "standard": null,
+      "langs": ["go"]
+    },
+    {
+      "id": "upgradeable-proxy",
+      "name": "Upgradeable proxy",
+      "short": "Upgradeable proxy",
+      "description": "Admin-swappable logic via delegate-call, state preserved across upgrades.",
+      "standard": null,
+      "langs": ["go"]
+    }
+  ]
+}

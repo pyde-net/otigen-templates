@@ -1,0 +1,165 @@
+# Behaviour tests for the scaffolded fungible-token contract.
+#
+# Run with:  otigen test           (default verbosity)
+# Or:        otigen test -vvvv      (full traces + storage diffs)
+#
+# Each test runs from fresh state, so every test calls the `init`
+# constructor first (deploy-time in production; a normal call here).
+# Spec: https://book.pyde.network/companion/OTIGEN_TEST_SPEC
+
+[accounts]
+deployer = {}
+alice    = {}
+bob      = {}
+
+[cheats]
+chain_id = 31337
+
+# ── Test 1: init mints the full supply to the deployer ────────────────
+[[tests]]
+name = "init_mints_full_supply_to_deployer"
+
+[[tests.calls]]
+function = "init"
+from     = "deployer"
+args     = ["1000000000"]
+expect.events = [
+  { name = "Transfer", to = "deployer", amount = "1000000000" },
+]
+
+[[tests.calls]]
+function = "total_supply"
+expect.return_value = "1000000000"
+
+[[tests.calls]]
+function = "balance_of"
+args     = ["deployer"]
+expect.return_value = "1000000000"
+
+# ── Test 2: transfer debits the sender and credits the recipient ──────
+[[tests]]
+name = "transfer_moves_balance"
+
+[[tests.calls]]
+function = "init"
+from     = "deployer"
+args     = ["1000"]
+
+[[tests.calls]]
+function = "transfer"
+from     = "deployer"
+args     = ["alice", "250"]
+expect.return_value = "1"
+expect.events = [
+  { name = "Transfer", from = "deployer", to = "alice", amount = "250" },
+]
+
+[[tests.calls]]
+function = "balance_of"
+args     = ["alice"]
+expect.return_value = "250"
+
+[[tests.calls]]
+function = "balance_of"
+args     = ["deployer"]
+expect.return_value = "750"
+
+# ── Test 3: approve + transfer_from spends the allowance ──────────────
+[[tests]]
+name = "approve_and_transfer_from"
+
+[[tests.calls]]
+function = "init"
+from     = "deployer"
+args     = ["1000"]
+
+[[tests.calls]]
+function = "approve"
+from     = "deployer"
+args     = ["alice", "400"]
+expect.return_value = "1"
+expect.events = [
+  { name = "Approval", owner = "deployer", spender = "alice", amount = "400" },
+]
+
+[[tests.calls]]
+function = "transfer_from"
+from     = "alice"
+args     = ["deployer", "bob", "300"]
+expect.return_value = "1"
+
+[[tests.calls]]
+function = "allowance"
+args     = ["deployer", "alice"]
+expect.return_value = "100"
+
+[[tests.calls]]
+function = "balance_of"
+args     = ["bob"]
+expect.return_value = "300"
+
+# ── Test 4: transfer_from beyond the allowance returns false ──────────
+[[tests]]
+name = "transfer_from_over_allowance_returns_false"
+
+[[tests.calls]]
+function = "init"
+from     = "deployer"
+args     = ["1000"]
+
+[[tests.calls]]
+function = "approve"
+from     = "deployer"
+args     = ["alice", "100"]
+
+[[tests.calls]]
+function = "transfer_from"
+from     = "alice"
+args     = ["deployer", "bob", "200"]
+expect.return_value = "0"
+
+[[tests.calls]]
+function = "balance_of"
+args     = ["bob"]
+expect.return_value = "0"
+
+# ── Test 5: mint is owner-gated (owner succeeds) ──────────────────────
+[[tests]]
+name = "owner_can_mint"
+
+[[tests.calls]]
+function = "init"
+from     = "deployer"
+args     = ["1000"]
+
+[[tests.calls]]
+function = "mint"
+from     = "deployer"
+args     = ["alice", "500"]
+expect.events = [
+  { name = "Transfer", to = "alice", amount = "500" },
+]
+
+[[tests.calls]]
+function = "total_supply"
+expect.return_value = "1500"
+
+[[tests.calls]]
+function = "balance_of"
+args     = ["alice"]
+expect.return_value = "500"
+
+# ── Test 6: mint by a non-owner reverts ───────────────────────────────
+[[tests]]
+name = "non_owner_cannot_mint"
+
+[[tests.calls]]
+function = "init"
+from     = "deployer"
+args     = ["1000"]
+
+[[tests.calls]]
+function = "mint"
+from     = "alice"
+args     = ["bob", "500"]
+expect.revert = "token: caller is not the owner"

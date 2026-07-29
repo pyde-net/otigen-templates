@@ -1,0 +1,104 @@
+# Pyde contract manifest. `otigen build` reads this as the single source of
+# truth: [state] → typed State accessors, [functions] → dispatch, [events] →
+# Emit helpers — all generated into pyde_gen.go.
+
+[contract]
+name        = "pyde-template"
+version     = "0.1.0"
+description = "An upgradeable proxy in Go — admin-swappable logic via delegate-call, state preserved across upgrades."
+type        = "contract"
+
+[contract.lang]
+language = "go"
+output   = "build/contract.wasm"
+
+[contract.lang.toolchain]
+tinygo_version = "0.41.0"
+
+[deploy]
+gas_limit = 10_000_000
+gas_price = "auto"
+
+[network.default]
+name = "devnet"
+
+[network.devnet]
+rpc_url  = "http://127.0.0.1:9933"
+chain_id = 31337
+
+# Privileged fields are prefixed `proxy_` so a logic contract's own
+# `admin`/`logic` field can't collide under delegate-call. `value` is the
+# intended shared-state demonstration slot.
+[state]
+schema = [
+    { name = "proxy_admin", type = "address" },
+    { name = "proxy_logic", type = "address" },
+    { name = "value",       type = "uint64" },
+]
+
+# Constructor — records the caller as admin and the first logic pointer.
+[functions.init]
+attributes = ["constructor"]
+inputs     = ["address"]
+outputs    = []
+
+[functions.upgrade_to]
+attributes = ["entry"]
+inputs     = ["address"]
+outputs    = []
+
+# Rotate the admin role. Admin-only. Reverts on zero-address new admin — use
+# `renounce_admin` for that so the irrevocable lock is loud.
+[functions.transfer_admin]
+attributes = ["entry"]
+inputs     = ["address"]
+outputs    = []
+
+# Renounce the admin role (admin = zero). Locks the logic pointer forever;
+# the contract becomes non-upgradeable. Irreversible.
+[functions.renounce_admin]
+attributes = ["entry"]
+inputs     = []
+outputs    = []
+
+[functions.forward]
+attributes = ["entry"]
+inputs     = ["string", "bytes"]
+outputs    = ["bytes"]
+
+[functions.get_admin]
+attributes = ["entry", "view"]
+inputs     = []
+outputs    = ["address"]
+
+[functions.get_logic]
+attributes = ["entry", "view"]
+inputs     = []
+outputs    = ["address"]
+
+[functions.get_value]
+attributes = ["entry", "view"]
+inputs     = []
+outputs    = ["uint64"]
+
+[events.Initialized]
+signature = "Initialized(address,address)"
+fields = [
+    { name = "admin",         type = "address", indexed = true },
+    { name = "initial_logic", type = "address", indexed = true },
+]
+
+[events.Upgraded]
+signature = "Upgraded(address,address)"
+fields = [
+    { name = "old_logic", type = "address", indexed = true },
+    { name = "new_logic", type = "address", indexed = true },
+]
+
+# Emitted by `transfer_admin` AND `renounce_admin` (with new_admin = zero).
+[events.AdminTransferred]
+signature = "AdminTransferred(address,address)"
+fields = [
+    { name = "old_admin", type = "address", indexed = true },
+    { name = "new_admin", type = "address", indexed = true },
+]

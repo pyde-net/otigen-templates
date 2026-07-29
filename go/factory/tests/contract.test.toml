@@ -1,0 +1,38 @@
+# factory behaviour tests.
+#
+# The full create → bump flow needs a deployed TEMPLATE contract to
+# instantiate (any contract with an `increment() -> uint64` and no required
+# constructor — the built-in `counter` template fits). That is a live,
+# two-contract flow, so it's walked through in the README rather than bundled
+# here. These tests cover the factory's own self-contained read paths: a fresh
+# factory has minted nothing, and unknown keys/names map to the zero address.
+
+[accounts]
+alice = {}
+
+[cheats]
+now      = 1_700_000_000
+chain_id = 31337
+
+[[tests]]
+name = "fresh_factory_state"
+
+[[tests.calls]]
+function = "created"
+expect.return_value = "0"
+
+[[tests.calls]]
+function = "next_key"
+expect.return_value = "0"
+
+# Unknown u64 key → zero address.
+[[tests.calls]]
+function = "child_of"
+args     = ["7"]
+expect.return_address = "0x0000000000000000000000000000000000000000000000000000000000000000"
+
+# Unknown name → zero address.
+[[tests.calls]]
+function = "child_of_name"
+args     = ["eth/usdc"]
+expect.return_address = "0x0000000000000000000000000000000000000000000000000000000000000000"

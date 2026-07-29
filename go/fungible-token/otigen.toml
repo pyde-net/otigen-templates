@@ -1,0 +1,98 @@
+# Pyde contract manifest. `otigen build` reads this as the single source of
+# truth: [state] → typed State accessors, [functions] → dispatch, [events] →
+# Emit helpers — all generated into pyde_gen.go.
+
+[contract]
+name        = "pyde-template"
+version     = "0.1.0"
+description = "A fungible token in Go — balances, allowances, and owner-gated minting."
+type        = "contract"
+
+[contract.lang]
+language = "go"
+output   = "build/contract.wasm"
+
+[contract.lang.toolchain]
+tinygo_version = "0.41.0"
+
+[deploy]
+gas_limit = 10_000_000
+gas_price = "auto"
+
+[network.default]
+name = "devnet"
+
+[network.devnet]
+rpc_url  = "http://127.0.0.1:9933"
+chain_id = 31337
+
+[state]
+schema = [
+    { name = "owner",        type = "address" },
+    { name = "total_supply", type = "uint128" },
+    { name = "balances",     type = "map", keys = ["address"], value = "uint128" },
+    { name = "allowances",   type = "map", keys = ["address", "address"], value = "uint128" },
+]
+
+# Constructor — runs once at deploy. Records the deployer as owner and mints
+# the initial supply to them. The chain rejects post-deploy calls to it.
+[functions.init]
+attributes = ["constructor"]
+inputs     = ["uint128"]
+outputs    = []
+
+[functions.transfer]
+attributes = ["entry"]
+inputs     = ["address", "uint128"]
+outputs    = ["bool"]
+
+[functions.approve]
+attributes = ["entry"]
+inputs     = ["address", "uint128"]
+outputs    = ["bool"]
+
+[functions.transfer_from]
+attributes = ["entry"]
+inputs     = ["address", "address", "uint128"]
+outputs    = ["bool"]
+
+[functions.mint]
+attributes = ["entry"]
+inputs     = ["address", "uint128"]
+outputs    = []
+
+[functions.balance_of]
+attributes = ["entry", "view"]
+inputs     = ["address"]
+outputs    = ["uint128"]
+
+[functions.allowance]
+attributes = ["entry", "view"]
+inputs     = ["address", "address"]
+outputs    = ["uint128"]
+
+[functions.total_supply]
+attributes = ["entry", "view"]
+inputs     = []
+outputs    = ["uint128"]
+
+[functions.owner]
+attributes = ["entry", "view"]
+inputs     = []
+outputs    = ["address"]
+
+[events.Transfer]
+signature = "Transfer(address,address,uint128)"
+fields = [
+    { name = "from",   type = "address", indexed = true },
+    { name = "to",     type = "address", indexed = true },
+    { name = "amount", type = "uint128" },
+]
+
+[events.Approval]
+signature = "Approval(address,address,uint128)"
+fields = [
+    { name = "owner",   type = "address", indexed = true },
+    { name = "spender", type = "address", indexed = true },
+    { name = "amount",  type = "uint128" },
+]

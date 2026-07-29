@@ -1,0 +1,94 @@
+# Pyde contract manifest. `otigen build` reads this as the single source of
+# truth: [state] → typed State accessors, [functions] → dispatch, [events] →
+# Emit helpers — all generated into pyde_gen.go.
+
+[contract]
+name        = "pyde-template"
+version     = "0.1.0"
+description = "A Merkle-tree airdrop in Go — off-chain commitment, on-chain proof-of-inclusion claims."
+type        = "contract"
+
+[contract.lang]
+language = "go"
+output   = "build/contract.wasm"
+
+[contract.lang.toolchain]
+tinygo_version = "0.41.0"
+
+[deploy]
+gas_limit = 10_000_000
+gas_price = "auto"
+
+[network.default]
+name = "devnet"
+
+[network.devnet]
+rpc_url  = "http://127.0.0.1:9933"
+chain_id = 31337
+
+# State schema. Five typed-storage fields:
+#   - admin (address): set by init(), gates set_root.
+#   - merkle_root (bytes32): root committed by set_root.
+#   - root_set (bool): one-shot lock on set_root.
+#   - total_claimed (uint128): cumulative claimed.
+#   - claimed (map<address, bool>): per-account claim flag.
+[state]
+schema = [
+    { name = "admin",         type = "address" },
+    { name = "merkle_root",   type = "bytes32" },
+    { name = "root_set",      type = "bool" },
+    { name = "total_claimed", type = "uint128" },
+    { name = "claimed",       type = "map", keys = ["address"], value = "bool" },
+]
+
+# Constructor — records the caller as admin. Chain rejects post-deploy calls.
+[functions.init]
+attributes = ["constructor"]
+inputs     = []
+outputs    = []
+
+# Payable funding entry. The contract has zero balance right after deploy;
+# claim() reverts until it is funded.
+[functions.fund]
+attributes = ["entry", "payable"]
+inputs     = []
+outputs    = []
+
+[functions.set_root]
+attributes = ["entry"]
+inputs     = ["bytes32"]
+outputs    = []
+
+[functions.claim]
+attributes = ["entry"]
+inputs     = ["uint128", "bytes"]
+outputs    = []
+
+[functions.is_claimed]
+attributes = ["entry", "view"]
+inputs     = ["address"]
+outputs    = ["bool"]
+
+[functions.total_claimed]
+attributes = ["entry", "view"]
+inputs     = []
+outputs    = ["uint128"]
+
+[functions.merkle_root_first_byte]
+attributes = ["entry", "view"]
+inputs     = []
+outputs    = ["int64"]
+
+[events.Claim]
+signature = "Claim(address,uint128)"
+fields = [
+    { name = "claimant", type = "address", indexed = true },
+    { name = "amount",   type = "uint128" },
+]
+
+[events.Funded]
+signature = "Funded(address,uint128)"
+fields = [
+    { name = "from",   type = "address", indexed = true },
+    { name = "amount", type = "uint128" },
+]

@@ -1,0 +1,42 @@
+# Pyde contract manifest. `otigen build` reads this as the single source of
+# truth: [state] → typed State accessors, [functions] → dispatch, [events] →
+# Emit helpers, [types] → borsh codecs — all generated into pyde_gen.go.
+
+[contract]
+name        = "pyde-template"
+version     = "0.1.0"
+description = "A minimal Pyde contract in Go — a single u64 counter."
+type        = "contract"
+
+[contract.lang]
+language = "go"
+output   = "build/contract.wasm"
+
+[contract.lang.toolchain]
+tinygo_version = "0.41.0"
+
+[deploy]
+gas_limit = 10_000_000
+gas_price = "auto"
+
+[network.default]
+name = "devnet"
+
+[network.devnet]
+rpc_url  = "http://127.0.0.1:9933"
+chain_id = 31337
+
+[state]
+schema = [
+    { name = "counter", type = "uint64" },
+]
+
+[functions.increment]
+attributes = ["entry"]
+inputs     = []
+outputs    = ["uint64"]
+
+[functions.get]
+attributes = ["entry", "view"]
+inputs     = []
+outputs    = ["uint64"]
