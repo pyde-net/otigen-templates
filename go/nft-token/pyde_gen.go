@@ -12,74 +12,7 @@ import pyde "github.com/pyde-net/pyde-host/go"
 
 var _ = pyde.StatusOK
 
-// ── Types ──────────────────────────────────────────────────────────
-
-// TokenInfoView is a generated borsh struct from [types.TokenInfoView].
-type TokenInfoView struct {
-	Name           string
-	Symbol         string
-	Decimals       uint8
-	TotalSupply    pyde.U128
-	MaxSupply      pyde.U128
-	Minter         pyde.Address
-	ExtensionFlags uint32
-}
-
-func (v TokenInfoView) encode(e *pyde.Encoder) {
-	e.String(v.Name)
-	e.String(v.Symbol)
-	e.U8(v.Decimals)
-	e.U128(v.TotalSupply)
-	e.U128(v.MaxSupply)
-	e.Address(v.Minter)
-	e.U32(v.ExtensionFlags)
-}
-
-func decodeTokenInfoView(d *pyde.Decoder) TokenInfoView {
-	var v TokenInfoView
-	v.Name = d.String()
-	v.Symbol = d.String()
-	v.Decimals = d.U8()
-	v.TotalSupply = d.U128()
-	v.MaxSupply = d.U128()
-	v.Minter = d.Address()
-	v.ExtensionFlags = d.U32()
-	return v
-}
-
 // ── Vec codecs ─────────────────────────────────────────────────────
-
-func __encodeVecAddress(e *pyde.Encoder, v []pyde.Address) {
-	e.U32(uint32(len(v)))
-	for _, x := range v {
-		e.Address(x)
-	}
-}
-
-func __decodeVecAddress(d *pyde.Decoder) []pyde.Address {
-	n := int(d.U32())
-	out := make([]pyde.Address, n)
-	for i := range out {
-		out[i] = d.Address()
-	}
-	return out
-}
-
-func __encodeVecU128(e *pyde.Encoder, v []pyde.U128) {
-	e.U32(uint32(len(v)))
-	for _, x := range v {
-		e.U128(x)
-	}
-}
-
-func __decodeVecU128(d *pyde.Decoder) []pyde.U128 {
-	n := int(d.U32())
-	out := make([]pyde.U128, n)
-	for i := range out {
-		out[i] = d.U128()
-	}
-	return out
-}
 
 func __encodeVecU8(e *pyde.Encoder, v []uint8) {
 	e.U32(uint32(len(v)))
@@ -103,14 +36,16 @@ func __decodeVecU8(d *pyde.Decoder) []uint8 {
 var State = struct {
 	TokenName         __stateTokenName
 	TokenSymbol       __stateTokenSymbol
-	TokenDecimals     __stateTokenDecimals
 	TotalSupply       __stateTotalSupply
 	MaxSupply         __stateMaxSupply
+	NextId            __stateNextId
 	Minter            __stateMinter
 	Manager           __stateManager
+	Owners            __stateOwners
 	Balances          __stateBalances
-	AllowanceAmounts  __stateAllowanceAmounts
-	AllowanceExpiries __stateAllowanceExpiries
+	TokenApprovals    __stateTokenApprovals
+	OperatorApprovals __stateOperatorApprovals
+	TokenUris         __stateTokenUris
 }{}
 
 type __stateTokenName struct{}
@@ -151,61 +86,61 @@ func (__stateTokenSymbol) Set(v string) {
 	pyde.StoreScalar("token_symbol", e.Finish())
 }
 
-type __stateTokenDecimals struct{}
+type __stateTotalSupply struct{}
 
-// Get reads the "token_decimals" scalar, returning the zero value if unset.
-func (__stateTokenDecimals) Get() uint8 {
-	b, ok := pyde.LoadScalar("token_decimals")
+// Get reads the "total_supply" scalar, returning the zero value if unset.
+func (__stateTotalSupply) Get() uint64 {
+	b, ok := pyde.LoadScalar("total_supply")
 	if !ok {
 		return 0
 	}
 	d := pyde.NewDecoder(b)
-	return d.U8()
-}
-
-// Set writes the "token_decimals" scalar.
-func (__stateTokenDecimals) Set(v uint8) {
-	e := pyde.NewEncoder()
-	e.U8(v)
-	pyde.StoreScalar("token_decimals", e.Finish())
-}
-
-type __stateTotalSupply struct{}
-
-// Get reads the "total_supply" scalar, returning the zero value if unset.
-func (__stateTotalSupply) Get() pyde.U128 {
-	b, ok := pyde.LoadScalar("total_supply")
-	if !ok {
-		return pyde.U128{}
-	}
-	d := pyde.NewDecoder(b)
-	return d.U128()
+	return d.U64()
 }
 
 // Set writes the "total_supply" scalar.
-func (__stateTotalSupply) Set(v pyde.U128) {
+func (__stateTotalSupply) Set(v uint64) {
 	e := pyde.NewEncoder()
-	e.U128(v)
+	e.U64(v)
 	pyde.StoreScalar("total_supply", e.Finish())
 }
 
 type __stateMaxSupply struct{}
 
 // Get reads the "max_supply" scalar, returning the zero value if unset.
-func (__stateMaxSupply) Get() pyde.U128 {
+func (__stateMaxSupply) Get() uint64 {
 	b, ok := pyde.LoadScalar("max_supply")
 	if !ok {
-		return pyde.U128{}
+		return 0
 	}
 	d := pyde.NewDecoder(b)
-	return d.U128()
+	return d.U64()
 }
 
 // Set writes the "max_supply" scalar.
-func (__stateMaxSupply) Set(v pyde.U128) {
+func (__stateMaxSupply) Set(v uint64) {
 	e := pyde.NewEncoder()
-	e.U128(v)
+	e.U64(v)
 	pyde.StoreScalar("max_supply", e.Finish())
+}
+
+type __stateNextId struct{}
+
+// Get reads the "next_id" scalar, returning the zero value if unset.
+func (__stateNextId) Get() uint64 {
+	b, ok := pyde.LoadScalar("next_id")
+	if !ok {
+		return 0
+	}
+	d := pyde.NewDecoder(b)
+	return d.U64()
+}
+
+// Set writes the "next_id" scalar.
+func (__stateNextId) Set(v uint64) {
+	e := pyde.NewEncoder()
+	e.U64(v)
+	pyde.StoreScalar("next_id", e.Finish())
 }
 
 type __stateMinter struct{}
@@ -246,22 +181,46 @@ func (__stateManager) Set(v pyde.Address) {
 	pyde.StoreScalar("manager", e.Finish())
 }
 
+type __stateOwners struct{}
+
+// Get reads "owners"[keys], returning the zero value if unset.
+func (__stateOwners) Get(k0 uint64) pyde.Address {
+	b, ok := pyde.LoadMap1("owners", pyde.NewEncoder().U64(k0).Finish())
+	if !ok {
+		return pyde.Address{}
+	}
+	d := pyde.NewDecoder(b)
+	return d.Address()
+}
+
+// Set writes "owners"[keys] = v.
+func (__stateOwners) Set(k0 uint64, v pyde.Address) {
+	e := pyde.NewEncoder()
+	e.Address(v)
+	pyde.StoreMap1("owners", pyde.NewEncoder().U64(k0).Finish(), e.Finish())
+}
+
+// Delete clears "owners"[keys].
+func (__stateOwners) Delete(k0 uint64) {
+	pyde.DeleteMap1("owners", pyde.NewEncoder().U64(k0).Finish())
+}
+
 type __stateBalances struct{}
 
 // Get reads "balances"[keys], returning the zero value if unset.
-func (__stateBalances) Get(k0 pyde.Address) pyde.U128 {
+func (__stateBalances) Get(k0 pyde.Address) uint64 {
 	b, ok := pyde.LoadMap1("balances", pyde.NewEncoder().Address(k0).Finish())
 	if !ok {
-		return pyde.U128{}
+		return 0
 	}
 	d := pyde.NewDecoder(b)
-	return d.U128()
+	return d.U64()
 }
 
 // Set writes "balances"[keys] = v.
-func (__stateBalances) Set(k0 pyde.Address, v pyde.U128) {
+func (__stateBalances) Set(k0 pyde.Address, v uint64) {
 	e := pyde.NewEncoder()
-	e.U128(v)
+	e.U64(v)
 	pyde.StoreMap1("balances", pyde.NewEncoder().Address(k0).Finish(), e.Finish())
 }
 
@@ -270,75 +229,125 @@ func (__stateBalances) Delete(k0 pyde.Address) {
 	pyde.DeleteMap1("balances", pyde.NewEncoder().Address(k0).Finish())
 }
 
-type __stateAllowanceAmounts struct{}
+type __stateTokenApprovals struct{}
 
-// Get reads "allowance_amounts"[keys], returning the zero value if unset.
-func (__stateAllowanceAmounts) Get(k0 pyde.Address, k1 pyde.Address) pyde.U128 {
-	b, ok := pyde.LoadMap2("allowance_amounts", pyde.NewEncoder().Address(k0).Finish(), pyde.NewEncoder().Address(k1).Finish())
+// Get reads "token_approvals"[keys], returning the zero value if unset.
+func (__stateTokenApprovals) Get(k0 uint64) pyde.Address {
+	b, ok := pyde.LoadMap1("token_approvals", pyde.NewEncoder().U64(k0).Finish())
 	if !ok {
-		return pyde.U128{}
+		return pyde.Address{}
 	}
 	d := pyde.NewDecoder(b)
-	return d.U128()
+	return d.Address()
 }
 
-// Set writes "allowance_amounts"[keys] = v.
-func (__stateAllowanceAmounts) Set(k0 pyde.Address, k1 pyde.Address, v pyde.U128) {
+// Set writes "token_approvals"[keys] = v.
+func (__stateTokenApprovals) Set(k0 uint64, v pyde.Address) {
 	e := pyde.NewEncoder()
-	e.U128(v)
-	pyde.StoreMap2("allowance_amounts", pyde.NewEncoder().Address(k0).Finish(), pyde.NewEncoder().Address(k1).Finish(), e.Finish())
+	e.Address(v)
+	pyde.StoreMap1("token_approvals", pyde.NewEncoder().U64(k0).Finish(), e.Finish())
 }
 
-// Delete clears "allowance_amounts"[keys].
-func (__stateAllowanceAmounts) Delete(k0 pyde.Address, k1 pyde.Address) {
-	pyde.DeleteMap2("allowance_amounts", pyde.NewEncoder().Address(k0).Finish(), pyde.NewEncoder().Address(k1).Finish())
+// Delete clears "token_approvals"[keys].
+func (__stateTokenApprovals) Delete(k0 uint64) {
+	pyde.DeleteMap1("token_approvals", pyde.NewEncoder().U64(k0).Finish())
 }
 
-type __stateAllowanceExpiries struct{}
+type __stateOperatorApprovals struct{}
 
-// Get reads "allowance_expiries"[keys], returning the zero value if unset.
-func (__stateAllowanceExpiries) Get(k0 pyde.Address, k1 pyde.Address) uint64 {
-	b, ok := pyde.LoadMap2("allowance_expiries", pyde.NewEncoder().Address(k0).Finish(), pyde.NewEncoder().Address(k1).Finish())
+// Get reads "operator_approvals"[keys], returning the zero value if unset.
+func (__stateOperatorApprovals) Get(k0 pyde.Address, k1 pyde.Address) bool {
+	b, ok := pyde.LoadMap2("operator_approvals", pyde.NewEncoder().Address(k0).Finish(), pyde.NewEncoder().Address(k1).Finish())
 	if !ok {
-		return 0
+		return false
 	}
 	d := pyde.NewDecoder(b)
-	return d.U64()
+	return d.Bool()
 }
 
-// Set writes "allowance_expiries"[keys] = v.
-func (__stateAllowanceExpiries) Set(k0 pyde.Address, k1 pyde.Address, v uint64) {
+// Set writes "operator_approvals"[keys] = v.
+func (__stateOperatorApprovals) Set(k0 pyde.Address, k1 pyde.Address, v bool) {
 	e := pyde.NewEncoder()
-	e.U64(v)
-	pyde.StoreMap2("allowance_expiries", pyde.NewEncoder().Address(k0).Finish(), pyde.NewEncoder().Address(k1).Finish(), e.Finish())
+	e.Bool(v)
+	pyde.StoreMap2("operator_approvals", pyde.NewEncoder().Address(k0).Finish(), pyde.NewEncoder().Address(k1).Finish(), e.Finish())
 }
 
-// Delete clears "allowance_expiries"[keys].
-func (__stateAllowanceExpiries) Delete(k0 pyde.Address, k1 pyde.Address) {
-	pyde.DeleteMap2("allowance_expiries", pyde.NewEncoder().Address(k0).Finish(), pyde.NewEncoder().Address(k1).Finish())
+// Delete clears "operator_approvals"[keys].
+func (__stateOperatorApprovals) Delete(k0 pyde.Address, k1 pyde.Address) {
+	pyde.DeleteMap2("operator_approvals", pyde.NewEncoder().Address(k0).Finish(), pyde.NewEncoder().Address(k1).Finish())
+}
+
+type __stateTokenUris struct{}
+
+// Get reads "token_uris"[keys], returning the zero value if unset.
+func (__stateTokenUris) Get(k0 uint64) string {
+	b, ok := pyde.LoadMap1("token_uris", pyde.NewEncoder().U64(k0).Finish())
+	if !ok {
+		return ""
+	}
+	d := pyde.NewDecoder(b)
+	return d.String()
+}
+
+// Set writes "token_uris"[keys] = v.
+func (__stateTokenUris) Set(k0 uint64, v string) {
+	e := pyde.NewEncoder()
+	e.String(v)
+	pyde.StoreMap1("token_uris", pyde.NewEncoder().U64(k0).Finish(), e.Finish())
+}
+
+// Delete clears "token_uris"[keys].
+func (__stateTokenUris) Delete(k0 uint64) {
+	pyde.DeleteMap1("token_uris", pyde.NewEncoder().U64(k0).Finish())
 }
 
 // ── Events ─────────────────────────────────────────────────────────
 
-// Approval is the Approval(address,address,uint128,uint64) event. Emit it with a named-field
+// __scalarTopic packs a fixed-width scalar's little-endian bytes into a
+// 32-byte topic, right-padded with zeros — the engine's convention for an
+// indexed primitive (matches Rust's declare_events! topic layout).
+func __scalarTopic(le []byte) pyde.Bytes32 {
+	var t pyde.Bytes32
+	copy(t[:], le)
+	return t
+}
+
+// Approval is the Approval(address,address,uint64) event. Emit it with a named-field
 // literal: Approval{...}.Emit().
 type Approval struct {
-	Owner      pyde.Address
-	Spender    pyde.Address
-	Remaining  pyde.U128
-	ExpiryWave uint64
+	Owner    pyde.Address
+	Approved pyde.Address
+	TokenId  uint64
 }
 
 // Emit appends this Approval event to the receipt.
 func (ev Approval) Emit() {
 	topics := []pyde.Bytes32{
-		pyde.EventTopic0("Approval(address,address,uint128,uint64)"),
+		pyde.EventTopic0("Approval(address,address,uint64)"),
 		pyde.Bytes32(ev.Owner),
-		pyde.Bytes32(ev.Spender),
+		pyde.Bytes32(ev.Approved),
+		__scalarTopic(pyde.NewEncoder().U64(ev.TokenId).Finish()),
+	}
+	pyde.Emit(topics, nil)
+}
+
+// ApprovalForAll is the ApprovalForAll(address,address,bool) event. Emit it with a named-field
+// literal: ApprovalForAll{...}.Emit().
+type ApprovalForAll struct {
+	Owner    pyde.Address
+	Operator pyde.Address
+	Approved bool
+}
+
+// Emit appends this ApprovalForAll event to the receipt.
+func (ev ApprovalForAll) Emit() {
+	topics := []pyde.Bytes32{
+		pyde.EventTopic0("ApprovalForAll(address,address,bool)"),
+		pyde.Bytes32(ev.Owner),
+		pyde.Bytes32(ev.Operator),
 	}
 	e := pyde.NewEncoder()
-	e.U128(ev.Remaining)
-	e.U64(ev.ExpiryWave)
+	e.Bool(ev.Approved)
 	pyde.Emit(topics, e.Finish())
 }
 
@@ -362,55 +371,32 @@ func (ev RoleTransfer) Emit() {
 	pyde.Emit(topics, e.Finish())
 }
 
-// TransferEvent is the Transfer(address,address,uint128) event. Emit it with a named-field
-// literal: TransferEvent{...}.Emit().
-type TransferEvent struct {
-	From   pyde.Address
-	To     pyde.Address
-	Amount pyde.U128
+// Transfer is the Transfer(address,address,uint64) event. Emit it with a named-field
+// literal: Transfer{...}.Emit().
+type Transfer struct {
+	From    pyde.Address
+	To      pyde.Address
+	TokenId uint64
 }
 
 // Emit appends this Transfer event to the receipt.
-func (ev TransferEvent) Emit() {
+func (ev Transfer) Emit() {
 	topics := []pyde.Bytes32{
-		pyde.EventTopic0("Transfer(address,address,uint128)"),
+		pyde.EventTopic0("Transfer(address,address,uint64)"),
 		pyde.Bytes32(ev.From),
 		pyde.Bytes32(ev.To),
+		__scalarTopic(pyde.NewEncoder().U64(ev.TokenId).Finish()),
 	}
-	e := pyde.NewEncoder()
-	e.U128(ev.Amount)
-	pyde.Emit(topics, e.Finish())
+	pyde.Emit(topics, nil)
 }
 
 // ── Dispatch ───────────────────────────────────────────────────────
-
-//go:wasmexport allowance
-func __pyde_export_allowance() {
-	__d := pyde.Args()
-	__a0 := __d.Address()
-	__a1 := __d.Address()
-	__r := Allowance(__a0, __a1)
-	__e := pyde.NewEncoder()
-	__e.U128(__r)
-	pyde.Return(__e.Finish())
-}
-
-//go:wasmexport allowance_expiry
-func __pyde_export_allowance_expiry() {
-	__d := pyde.Args()
-	__a0 := __d.Address()
-	__a1 := __d.Address()
-	__r := AllowanceExpiry(__a0, __a1)
-	__e := pyde.NewEncoder()
-	__e.U64(__r)
-	pyde.Return(__e.Finish())
-}
 
 //go:wasmexport approve
 func __pyde_export_approve() {
 	__d := pyde.Args()
 	__a0 := __d.Address()
-	__a1 := __d.U128()
+	__a1 := __d.U64()
 	Approve(__a0, __a1)
 	pyde.ReturnNothing()
 }
@@ -421,62 +407,26 @@ func __pyde_export_balance_of() {
 	__a0 := __d.Address()
 	__r := BalanceOf(__a0)
 	__e := pyde.NewEncoder()
-	__e.U128(__r)
-	pyde.Return(__e.Finish())
-}
-
-//go:wasmexport balance_of_batch
-func __pyde_export_balance_of_batch() {
-	__d := pyde.Args()
-	__a0 := __decodeVecAddress(__d)
-	__r := BalanceOfBatch(__a0)
-	__e := pyde.NewEncoder()
-	__encodeVecU128(__e, __r)
+	__e.U64(__r)
 	pyde.Return(__e.Finish())
 }
 
 //go:wasmexport burn
 func __pyde_export_burn() {
 	__d := pyde.Args()
-	__a0 := __d.U128()
+	__a0 := __d.U64()
 	Burn(__a0)
 	pyde.ReturnNothing()
 }
 
-//go:wasmexport burn_from
-func __pyde_export_burn_from() {
+//go:wasmexport get_approved
+func __pyde_export_get_approved() {
 	__d := pyde.Args()
-	__a0 := __d.Address()
-	__a1 := __d.U128()
-	BurnFrom(__a0, __a1)
-	pyde.ReturnNothing()
-}
-
-//go:wasmexport decimals
-func __pyde_export_decimals() {
-	__r := Decimals()
+	__a0 := __d.U64()
+	__r := GetApproved(__a0)
 	__e := pyde.NewEncoder()
-	__e.U8(__r)
+	__e.Address(__r)
 	pyde.Return(__e.Finish())
-}
-
-//go:wasmexport decrease_allowance
-func __pyde_export_decrease_allowance() {
-	__d := pyde.Args()
-	__a0 := __d.Address()
-	__a1 := __d.U128()
-	DecreaseAllowance(__a0, __a1)
-	pyde.ReturnNothing()
-}
-
-//go:wasmexport increase_allowance
-func __pyde_export_increase_allowance() {
-	__d := pyde.Args()
-	__a0 := __d.Address()
-	__a1 := __d.U128()
-	__a2 := __d.U64()
-	IncreaseAllowance(__a0, __a1, __a2)
-	pyde.ReturnNothing()
 }
 
 //go:wasmexport init
@@ -484,11 +434,20 @@ func __pyde_export_init() {
 	__d := pyde.Args()
 	__a0 := __d.String()
 	__a1 := __d.String()
-	__a2 := __d.U8()
-	__a3 := __d.U128()
-	__a4 := __d.U128()
-	Init(__a0, __a1, __a2, __a3, __a4)
+	__a2 := __d.U64()
+	Init(__a0, __a1, __a2)
 	pyde.ReturnNothing()
+}
+
+//go:wasmexport is_approved_for_all
+func __pyde_export_is_approved_for_all() {
+	__d := pyde.Args()
+	__a0 := __d.Address()
+	__a1 := __d.Address()
+	__r := IsApprovedForAll(__a0, __a1)
+	__e := pyde.NewEncoder()
+	__e.Bool(__r)
+	pyde.Return(__e.Finish())
 }
 
 //go:wasmexport manager
@@ -503,7 +462,7 @@ func __pyde_export_manager() {
 func __pyde_export_max_supply() {
 	__r := MaxSupply()
 	__e := pyde.NewEncoder()
-	__e.U128(__r)
+	__e.U64(__r)
 	pyde.Return(__e.Finish())
 }
 
@@ -511,9 +470,11 @@ func __pyde_export_max_supply() {
 func __pyde_export_mint() {
 	__d := pyde.Args()
 	__a0 := __d.Address()
-	__a1 := __d.U128()
-	Mint(__a0, __a1)
-	pyde.ReturnNothing()
+	__a1 := __d.String()
+	__r := Mint(__a0, __a1)
+	__e := pyde.NewEncoder()
+	__e.U64(__r)
+	pyde.Return(__e.Finish())
 }
 
 //go:wasmexport minter
@@ -532,22 +493,22 @@ func __pyde_export_name() {
 	pyde.Return(__e.Finish())
 }
 
-//go:wasmexport revoke_allowance
-func __pyde_export_revoke_allowance() {
+//go:wasmexport owner_of
+func __pyde_export_owner_of() {
 	__d := pyde.Args()
-	__a0 := __d.Address()
-	RevokeAllowance(__a0)
-	pyde.ReturnNothing()
+	__a0 := __d.U64()
+	__r := OwnerOf(__a0)
+	__e := pyde.NewEncoder()
+	__e.Address(__r)
+	pyde.Return(__e.Finish())
 }
 
-//go:wasmexport set_allowance_exact
-func __pyde_export_set_allowance_exact() {
+//go:wasmexport set_approval_for_all
+func __pyde_export_set_approval_for_all() {
 	__d := pyde.Args()
 	__a0 := __d.Address()
-	__a1 := __d.U128()
-	__a2 := __d.U128()
-	__a3 := __d.U64()
-	SetAllowanceExact(__a0, __a1, __a2, __a3)
+	__a1 := __d.Bool()
+	SetApprovalForAll(__a0, __a1)
 	pyde.ReturnNothing()
 }
 
@@ -583,11 +544,13 @@ func __pyde_export_symbol() {
 	pyde.Return(__e.Finish())
 }
 
-//go:wasmexport token_info
-func __pyde_export_token_info() {
-	__r := TokenInfo()
+//go:wasmexport token_uri
+func __pyde_export_token_uri() {
+	__d := pyde.Args()
+	__a0 := __d.U64()
+	__r := TokenUri(__a0)
 	__e := pyde.NewEncoder()
-	__r.encode(__e)
+	__e.String(__r)
 	pyde.Return(__e.Finish())
 }
 
@@ -595,24 +558,15 @@ func __pyde_export_token_info() {
 func __pyde_export_total_supply() {
 	__r := TotalSupply()
 	__e := pyde.NewEncoder()
-	__e.U128(__r)
+	__e.U64(__r)
 	pyde.Return(__e.Finish())
-}
-
-//go:wasmexport transfer
-func __pyde_export_transfer() {
-	__d := pyde.Args()
-	__a0 := __d.Address()
-	__a1 := __d.U128()
-	Transfer(__a0, __a1)
-	pyde.ReturnNothing()
 }
 
 //go:wasmexport transfer_call
 func __pyde_export_transfer_call() {
 	__d := pyde.Args()
 	__a0 := __d.Address()
-	__a1 := __d.U128()
+	__a1 := __d.U64()
 	__a2 := __decodeVecU8(__d)
 	__r := TransferCall(__a0, __a1, __a2)
 	__e := pyde.NewEncoder()
@@ -625,7 +579,7 @@ func __pyde_export_transfer_from() {
 	__d := pyde.Args()
 	__a0 := __d.Address()
 	__a1 := __d.Address()
-	__a2 := __d.U128()
+	__a2 := __d.U64()
 	TransferFrom(__a0, __a1, __a2)
 	pyde.ReturnNothing()
 }

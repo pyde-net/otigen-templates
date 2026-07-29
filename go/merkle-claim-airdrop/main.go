@@ -101,7 +101,7 @@ func Fund() {
 	if amount.IsZero() {
 		pyde.Revert("merkle: fund requires non-zero value")
 	}
-	EmitFunded(pyde.Caller(), amount)
+	Funded{From: pyde.Caller(), Amount: amount}.Emit()
 }
 
 // SetRoot commits the merkle root. Admin-only, and one-shot: once set, the root
@@ -150,7 +150,9 @@ func Claim(amount pyde.U128, proof []byte) {
 		pyde.Revert("merkle: total claimed overflow")
 	}
 	State.TotalClaimed.Set(newTotal)
-	EmitClaim(claimant, amount)
+	// The generated event struct is ClaimEvent (suffixed to avoid colliding
+	// with the Claim entry function — Go has no events:: namespace).
+	ClaimEvent{Claimant: claimant, Amount: amount}.Emit()
 	pay(claimant, amount)
 }
 

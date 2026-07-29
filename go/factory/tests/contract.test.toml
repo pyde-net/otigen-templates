@@ -1,11 +1,12 @@
-# factory behaviour tests.
+# factory-rust behaviour tests.
 #
 # The full create → bump flow needs a deployed TEMPLATE contract to
-# instantiate (any contract with an `increment() -> uint64` and no required
+# instantiate (any contract with an `increment() -> u64` and no required
 # constructor — the built-in `counter` template fits). That is a live,
-# two-contract flow, so it's walked through in the README rather than bundled
-# here. These tests cover the factory's own self-contained read paths: a fresh
-# factory has minted nothing, and unknown keys/names map to the zero address.
+# two-contract flow, so it's walked through in the README rather than
+# bundled here. These tests cover the factory's own self-contained read
+# paths: a fresh factory has minted nothing, and unknown keys/names map
+# to the zero address.
 
 [accounts]
 alice = {}

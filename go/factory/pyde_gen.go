@@ -108,19 +108,6 @@ func (__stateNamed) Delete(k0 string) {
 	pyde.DeleteMap1("named", pyde.NewEncoder().String(k0).Finish())
 }
 
-// ── Events ─────────────────────────────────────────────────────────
-
-// EmitChildCreated appends a ChildCreated event to the receipt.
-func EmitChildCreated(template pyde.Address, child pyde.Address) {
-	topics := []pyde.Bytes32{
-		pyde.EventTopic0("ChildCreated(address,address)"),
-		pyde.Bytes32(template),
-	}
-	e := pyde.NewEncoder()
-	e.Address(child)
-	pyde.Emit(topics, e.Finish())
-}
-
 // ── Dispatch ───────────────────────────────────────────────────────
 
 //go:wasmexport bump

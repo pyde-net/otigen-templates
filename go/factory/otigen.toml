@@ -1,11 +1,20 @@
-# Pyde contract manifest. `otigen build` reads this as the single source of
-# truth: [state] → typed State accessors, [functions] → dispatch, [events] →
-# Emit helpers — all generated into pyde_gen.go.
+# A factory: mint and drive child contracts via `pyde::instantiate`.
+#
+# The template is ANY contract you have already deployed — there is no
+# dedicated "template" contract to ship. Deploy a contract (the built-in
+# `counter` template is a perfect fit — it has an `increment() -> u64`
+# and no required constructor), copy its address, and pass it to
+# `create`. The factory instantiates the template with NO constructor
+# args, so any contract without a required constructor works.
+#
+# The factory chooses each child's salt three ways (auto counter / u64
+# key / string name) and reaches children three ways (by key / by name /
+# by raw address).
 
 [contract]
 name        = "pyde-template"
 version     = "0.1.0"
-description = "A factory in Go — mints child contracts (auto / u64 / string salts) and drives them by key, name, or address."
+description = "A factory: mints child contracts (auto / u64 / string salts) and drives them by key, name, or address."
 type        = "contract"
 
 [contract.lang]
@@ -28,17 +37,17 @@ chain_id = 31337
 
 [state]
 schema = [
-    # AUTO salt counter — Create salts each child with this, then bumps it.
+    # AUTO salt counter — `create` salts each child with this, then bumps it.
     { name = "next_key", type = "uint64" },
     # Total children minted.
     { name = "created",  type = "uint64" },
-    # u64-keyed registry: auto + explicit-key children (ChildOf by key).
+    # u64-keyed registry: auto + explicit-key children (getPair by key).
     { name = "children", type = "map", keys = ["uint64"], value = "address" },
-    # string-keyed registry: named children (ChildOfName by name).
-    { name = "named",    type = "map", keys = ["string"], value = "address" },
+    # string-keyed registry: named children (getPair by name).
+    { name = "named",    type = "map", keys = ["string"],  value = "address" },
 ]
 
-# ── create — choose the salt ──
+# ─── create — choose the salt ───
 
 # AUTO salt: no salt to manage; each call takes the next key.
 [functions.create]
@@ -58,7 +67,7 @@ attributes = ["entry"]
 inputs     = ["address", "string"]
 outputs    = ["address"]
 
-# ── look up ──
+# ─── look up ───
 
 [functions.child_of]
 attributes = ["entry", "view"]
@@ -80,7 +89,7 @@ attributes = ["entry", "view"]
 inputs     = []
 outputs    = ["uint64"]
 
-# ── interact — reach a child ──
+# ─── interact — reach a child ───
 
 # By u64 key: look up, then cross-call the child's `increment`.
 [functions.bump]
@@ -99,10 +108,3 @@ outputs    = ["uint64"]
 attributes = ["entry"]
 inputs     = ["address"]
 outputs    = ["uint64"]
-
-[events.ChildCreated]
-signature = "ChildCreated(address,address)"
-fields = [
-    { name = "template", type = "address", indexed = true },
-    { name = "child",    type = "address" },
-]

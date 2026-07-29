@@ -1,165 +1,669 @@
-# Behaviour tests for the scaffolded fungible-token contract.
+# `fungible-token` — pts-f/1 behaviour suite for `otigen test`.
 #
-# Run with:  otigen test           (default verbosity)
-# Or:        otigen test -vvvv      (full traces + storage diffs)
+# Pins the PIP-0005 surface: canonical `token:*` revert codes, the
+# zero-sentinel Transfer family, delta-only expiring allowances (with
+# wave time-travel via per-call `wave_id` overrides), the CAS
+# primitive, role gating, and the recipient guards — including the
+# token's own address via the `__contract__` alias.
 #
-# Each test runs from fresh state, so every test calls the `init`
-# constructor first (deploy-time in production; a normal call here).
-# Spec: https://book.pyde.network/companion/OTIGEN_TEST_SPEC
+# Not covered here (contract-level e2e territory): `transfer_call`'s
+# HAPPY path needs a real receiver contract (the token-vault example
+# is the reference receiver); this suite pins its failure paths.
+#
+# Convention: every test calls `init` from `alice` first — alice is
+# deployer, initial holder, minter, and manager. Initial supply
+# 1_000_000, uncapped unless the test says otherwise.
 
 [accounts]
-deployer = {}
-alice    = {}
-bob      = {}
+alice = {}
+bob   = {}
+carol = {}
+dave  = {}
 
+# NOTE: the engine execution context runs at wave 0 unless a call sets
+# an explicit `wave_id` override (sticky for the rest of the test) —
+# expiry-sensitive tests pin their waves explicitly below.
 [cheats]
+now      = 1_700_000_000
 chain_id = 31337
 
-# ── Test 1: init mints the full supply to the deployer ────────────────
+# ─── init: supply, metadata, roles ──────────────────────────────────
+
 [[tests]]
-name = "init_mints_full_supply_to_deployer"
+name = "init_mints_initial_supply_to_deployer"
 
 [[tests.calls]]
 function = "init"
-from     = "deployer"
-args     = ["1000000000"]
+args     = ["Pyde Demo", "PYDM", "9", "1000000", "0"]
+from     = "alice"
 expect.events = [
-  { name = "Transfer", to = "deployer", amount = "1000000000" },
-]
-
-[[tests.calls]]
-function = "total_supply"
-expect.return_value = "1000000000"
-
-[[tests.calls]]
-function = "balance_of"
-args     = ["deployer"]
-expect.return_value = "1000000000"
-
-# ── Test 2: transfer debits the sender and credits the recipient ──────
-[[tests]]
-name = "transfer_moves_balance"
-
-[[tests.calls]]
-function = "init"
-from     = "deployer"
-args     = ["1000"]
-
-[[tests.calls]]
-function = "transfer"
-from     = "deployer"
-args     = ["alice", "250"]
-expect.return_value = "1"
-expect.events = [
-  { name = "Transfer", from = "deployer", to = "alice", amount = "250" },
+  { name = "Transfer", to = "alice", amount = "1000000" },
+  { name = "RoleTransfer", holder = "alice" },
+  { name = "RoleTransfer", holder = "alice" },
 ]
 
 [[tests.calls]]
 function = "balance_of"
 args     = ["alice"]
-expect.return_value = "250"
+expect.return_value = "1000000"
 
 [[tests.calls]]
-function = "balance_of"
-args     = ["deployer"]
-expect.return_value = "750"
+function = "total_supply"
+expect.return_value = "1000000"
 
-# ── Test 3: approve + transfer_from spends the allowance ──────────────
+[[tests.calls]]
+function = "max_supply"
+expect.return_value = "0"
+
 [[tests]]
-name = "approve_and_transfer_from"
+name = "init_records_metadata_and_standard"
 
 [[tests.calls]]
 function = "init"
-from     = "deployer"
-args     = ["1000"]
+args     = ["Pyde Demo", "PYDM", "9", "1000000", "0"]
+from     = "alice"
 
 [[tests.calls]]
-function = "approve"
-from     = "deployer"
-args     = ["alice", "400"]
-expect.return_value = "1"
+function = "decimals"
+expect.return_value = "9"
+
+# String returns aren't comparable by the runner — no_revert pins the
+# path executes; the e2e harness asserts the exact bytes.
+[[tests.calls]]
+function = "standard"
+expect.no_revert = true
+
+[[tests.calls]]
+function = "name"
+expect.no_revert = true
+
+[[tests.calls]]
+function = "symbol"
+expect.no_revert = true
+
+[[tests.calls]]
+function = "token_info"
+expect.no_revert = true
+
+[[tests]]
+name = "init_rejects_bad_decimals_and_cap_violation"
+
+[[tests.calls]]
+function = "init"
+args     = ["Pyde Demo", "PYDM", "19", "1000000", "0"]
+from     = "alice"
+expect.revert = "token:invalid_decimals"
+
+[[tests]]
+name = "init_initial_supply_above_cap_reverts"
+
+[[tests.calls]]
+function = "init"
+args     = ["Pyde Demo", "PYDM", "9", "1000000", "500"]
+from     = "alice"
+expect.revert = "token:cap_exceeded"
+
+# ─── transfer ───────────────────────────────────────────────────────
+
+[[tests]]
+name = "transfer_happy_path"
+
+[[tests.calls]]
+function = "init"
+args     = ["Pyde Demo", "PYDM", "9", "1000000", "0"]
+from     = "alice"
+
+[[tests.calls]]
+function = "transfer"
+from     = "alice"
+args     = ["bob", "300"]
 expect.events = [
-  { name = "Approval", owner = "deployer", spender = "alice", amount = "400" },
+  { name = "Transfer", from = "alice", to = "bob", amount = "300" },
 ]
 
 [[tests.calls]]
-function = "transfer_from"
-from     = "alice"
-args     = ["deployer", "bob", "300"]
-expect.return_value = "1"
-
-[[tests.calls]]
-function = "allowance"
-args     = ["deployer", "alice"]
-expect.return_value = "100"
+function = "balance_of"
+args     = ["alice"]
+expect.return_value = "999700"
 
 [[tests.calls]]
 function = "balance_of"
 args     = ["bob"]
 expect.return_value = "300"
 
-# ── Test 4: transfer_from beyond the allowance returns false ──────────
 [[tests]]
-name = "transfer_from_over_allowance_returns_false"
+name = "transfer_insufficient_balance_reverts"
 
 [[tests.calls]]
 function = "init"
-from     = "deployer"
-args     = ["1000"]
-
-[[tests.calls]]
-function = "approve"
-from     = "deployer"
-args     = ["alice", "100"]
-
-[[tests.calls]]
-function = "transfer_from"
+args     = ["Pyde Demo", "PYDM", "9", "1000000", "0"]
 from     = "alice"
-args     = ["deployer", "bob", "200"]
-expect.return_value = "0"
 
 [[tests.calls]]
-function = "balance_of"
-args     = ["bob"]
-expect.return_value = "0"
+function = "transfer"
+from     = "bob"                 # bob has 0
+args     = ["carol", "100"]
+expect.revert = "token:insufficient_balance"
 
-# ── Test 5: mint is owner-gated (owner succeeds) ──────────────────────
 [[tests]]
-name = "owner_can_mint"
+name = "transfer_to_zero_address_reverts"
 
 [[tests.calls]]
 function = "init"
-from     = "deployer"
-args     = ["1000"]
+args     = ["Pyde Demo", "PYDM", "9", "1000000", "0"]
+from     = "alice"
 
 [[tests.calls]]
-function = "mint"
-from     = "deployer"
-args     = ["alice", "500"]
-expect.events = [
-  { name = "Transfer", to = "alice", amount = "500" },
+function = "transfer"
+from     = "alice"
+args = [
+  "0x0000000000000000000000000000000000000000000000000000000000000000",
+  "100",
 ]
+expect.revert = "token:invalid_recipient"
+
+# The single largest measured stuck-token bucket on other chains:
+# transfers to the token's own contract address are rejected.
+[[tests]]
+name = "transfer_to_token_contract_reverts"
 
 [[tests.calls]]
-function = "total_supply"
-expect.return_value = "1500"
+function = "init"
+args     = ["Pyde Demo", "PYDM", "9", "1000000", "0"]
+from     = "alice"
+
+[[tests.calls]]
+function = "transfer"
+from     = "alice"
+args     = ["__contract__", "100"]
+expect.revert = "token:invalid_recipient"
+
+[[tests]]
+name = "transfer_to_self_is_noop"
+
+[[tests.calls]]
+function = "init"
+args     = ["Pyde Demo", "PYDM", "9", "1000000", "0"]
+from     = "alice"
+
+[[tests.calls]]
+function = "transfer"
+from     = "alice"
+args     = ["alice", "500"]
+expect.no_revert = true
 
 [[tests.calls]]
 function = "balance_of"
 args     = ["alice"]
-expect.return_value = "500"
+expect.return_value = "1000000"
 
-# ── Test 6: mint by a non-owner reverts ───────────────────────────────
+# transfer_call is exercised end-to-end in the token-vault receiver
+# suite (both the ACK happy path and the codeless/bad-receiver revert
+# path) — the toml runner cannot encode vec(uint8) arguments yet.
+
+# ─── approve (compat sugar: max TTL auto-applied) ───────────────────
+
 [[tests]]
-name = "non_owner_cannot_mint"
+name = "approve_sets_amount_with_max_ttl"
 
 [[tests.calls]]
 function = "init"
-from     = "deployer"
-args     = ["1000"]
+args     = ["Pyde Demo", "PYDM", "9", "1000000", "0"]
+from     = "alice"
+
+# Explicit wave 100 → expiry = 100 + MAX_ALLOWANCE_TTL_WAVES = 63_072_100.
+[[tests.calls]]
+function = "approve"
+from     = "alice"
+args     = ["bob", "1000"]
+wave_id  = 100
+expect.events = [
+  { name = "Approval", owner = "alice", spender = "bob", remaining = "1000", expiry_wave = "63072100" },
+]
+
+[[tests.calls]]
+function = "allowance"
+args     = ["alice", "bob"]
+expect.return_value = "1000"
+
+[[tests.calls]]
+function = "allowance_expiry"
+args     = ["alice", "bob"]
+expect.return_value = "63072100"
+
+# ─── expiry: the drain economy has no substrate ─────────────────────
+
+[[tests]]
+name = "allowance_reports_zero_after_expiry"
+
+[[tests.calls]]
+function = "init"
+args     = ["Pyde Demo", "PYDM", "9", "1000000", "0"]
+from     = "alice"
+
+[[tests.calls]]
+function = "approve"
+from     = "alice"
+args     = ["bob", "1000"]
+wave_id  = 100
+
+# Still live AT the expiry wave (live means wave ≤ expiry)…
+[[tests.calls]]
+function = "allowance"
+args     = ["alice", "bob"]
+wave_id  = 63_072_100
+expect.return_value = "1000"
+
+# …zero one wave past it (lazy evaluation, no keeper).
+[[tests.calls]]
+function = "allowance"
+args     = ["alice", "bob"]
+wave_id  = 63_072_101
+expect.return_value = "0"
+
+[[tests]]
+name = "transfer_from_expired_allowance_reverts"
+
+[[tests.calls]]
+function = "init"
+args     = ["Pyde Demo", "PYDM", "9", "1000000", "0"]
+from     = "alice"
+
+[[tests.calls]]
+function = "approve"
+from     = "alice"
+args     = ["bob", "1000"]
+wave_id  = 100
+
+[[tests.calls]]
+function = "transfer_from"
+from     = "bob"
+args     = ["alice", "carol", "100"]
+wave_id  = 63_072_101
+expect.revert = "token:allowance_expired"
+
+# ─── delta allowances ───────────────────────────────────────────────
+
+[[tests]]
+name = "increase_allowance_is_delta_based"
+
+[[tests.calls]]
+function = "init"
+args     = ["Pyde Demo", "PYDM", "9", "1000000", "0"]
+from     = "alice"
+
+[[tests.calls]]
+function = "increase_allowance"
+from     = "alice"
+args     = ["bob", "400", "5000"]
+expect.events = [
+  { name = "Approval", owner = "alice", spender = "bob", remaining = "400", expiry_wave = "5000" },
+]
+
+[[tests.calls]]
+function = "increase_allowance"
+from     = "alice"
+args     = ["bob", "100", "6000"]
+expect.events = [
+  { name = "Approval", remaining = "500", expiry_wave = "6000" },
+]
+
+[[tests.calls]]
+function = "allowance"
+args     = ["alice", "bob"]
+expect.return_value = "500"
+
+[[tests]]
+name = "increase_allowance_expiry_bounds_enforced"
+
+[[tests.calls]]
+function = "init"
+args     = ["Pyde Demo", "PYDM", "9", "1000000", "0"]
+from     = "alice"
+
+# expiry in the past (≤ the pinned current wave 100)
+[[tests.calls]]
+function = "increase_allowance"
+from     = "alice"
+args     = ["bob", "400", "50"]
+wave_id  = 100
+expect.revert = "token:invalid_expiry"
+
+# expiry beyond now (100) + MAX_ALLOWANCE_TTL_WAVES
+[[tests.calls]]
+function = "increase_allowance"
+from     = "alice"
+args     = ["bob", "400", "63073000"]
+expect.revert = "token:invalid_expiry"
+
+[[tests]]
+name = "expired_grant_contributes_zero_to_increase"
+
+[[tests.calls]]
+function = "init"
+args     = ["Pyde Demo", "PYDM", "9", "1000000", "0"]
+from     = "alice"
+
+[[tests.calls]]
+function = "increase_allowance"
+from     = "alice"
+args     = ["bob", "400", "5000"]
+
+# Past the old expiry, a new grant starts from zero — the stale 400
+# does not accumulate.
+[[tests.calls]]
+function = "increase_allowance"
+from     = "alice"
+args     = ["bob", "100", "10000"]
+wave_id  = 6_000
+expect.events = [
+  { name = "Approval", remaining = "100", expiry_wave = "10000" },
+]
+
+[[tests]]
+name = "decrease_allowance_floors_at_zero"
+
+[[tests.calls]]
+function = "init"
+args     = ["Pyde Demo", "PYDM", "9", "1000000", "0"]
+from     = "alice"
+
+[[tests.calls]]
+function = "increase_allowance"
+from     = "alice"
+args     = ["bob", "400", "5000"]
+
+[[tests.calls]]
+function = "decrease_allowance"
+from     = "alice"
+args     = ["bob", "1000"]
+expect.events = [
+  { name = "Approval", remaining = "0" },
+]
+
+[[tests.calls]]
+function = "allowance"
+args     = ["alice", "bob"]
+expect.return_value = "0"
+
+[[tests]]
+name = "revoke_allowance_hard_zeros"
+
+[[tests.calls]]
+function = "init"
+args     = ["Pyde Demo", "PYDM", "9", "1000000", "0"]
+from     = "alice"
+
+[[tests.calls]]
+function = "approve"
+from     = "alice"
+args     = ["bob", "1000"]
+
+[[tests.calls]]
+function = "revoke_allowance"
+from     = "alice"
+args     = ["bob"]
+expect.events = [
+  { name = "Approval", remaining = "0", expiry_wave = "0" },
+]
+
+[[tests.calls]]
+function = "allowance"
+args     = ["alice", "bob"]
+expect.return_value = "0"
+
+# ─── set_allowance_exact (CAS) ──────────────────────────────────────
+
+[[tests]]
+name = "set_allowance_exact_happy_path"
+
+[[tests.calls]]
+function = "init"
+args     = ["Pyde Demo", "PYDM", "9", "1000000", "0"]
+from     = "alice"
+
+[[tests.calls]]
+function = "increase_allowance"
+from     = "alice"
+args     = ["bob", "400", "5000"]
+
+[[tests.calls]]
+function = "set_allowance_exact"
+from     = "alice"
+args     = ["bob", "400", "250", "6000"]
+expect.events = [
+  { name = "Approval", remaining = "250", expiry_wave = "6000" },
+]
+
+[[tests]]
+name = "set_allowance_exact_stale_expectation_reverts"
+
+[[tests.calls]]
+function = "init"
+args     = ["Pyde Demo", "PYDM", "9", "1000000", "0"]
+from     = "alice"
+
+[[tests.calls]]
+function = "increase_allowance"
+from     = "alice"
+args     = ["bob", "400", "5000"]
+
+# Expected 100, actual 400 — the CAS refuses (retriable condition).
+[[tests.calls]]
+function = "set_allowance_exact"
+from     = "alice"
+args     = ["bob", "100", "250", "6000"]
+expect.revert = "token:allowance_changed"
+
+# ─── transfer_from ──────────────────────────────────────────────────
+
+[[tests]]
+name = "transfer_from_happy_path_emits_transfer_only"
+
+[[tests.calls]]
+function = "init"
+args     = ["Pyde Demo", "PYDM", "9", "1000000", "0"]
+from     = "alice"
+
+[[tests.calls]]
+function = "approve"
+from     = "alice"
+args     = ["bob", "1000"]
+
+[[tests.calls]]
+function = "transfer_from"
+from     = "bob"
+args     = ["alice", "carol", "400"]
+expect.events = [
+  { name = "Transfer", from = "alice", to = "carol", amount = "400" },
+]
+
+[[tests.calls]]
+function = "balance_of"
+args     = ["carol"]
+expect.return_value = "400"
+
+[[tests.calls]]
+function = "allowance"
+args     = ["alice", "bob"]
+expect.return_value = "600"
+
+[[tests]]
+name = "transfer_from_insufficient_allowance_reverts"
+
+[[tests.calls]]
+function = "init"
+args     = ["Pyde Demo", "PYDM", "9", "1000000", "0"]
+from     = "alice"
+
+[[tests.calls]]
+function = "approve"
+from     = "alice"
+args     = ["bob", "100"]
+
+[[tests.calls]]
+function = "transfer_from"
+from     = "bob"
+args     = ["alice", "carol", "400"]
+expect.revert = "token:insufficient_allowance"
+
+[[tests]]
+name = "transfer_from_no_grant_reverts"
+
+[[tests.calls]]
+function = "init"
+args     = ["Pyde Demo", "PYDM", "9", "1000000", "0"]
+from     = "alice"
+
+[[tests.calls]]
+function = "transfer_from"
+from     = "bob"
+args     = ["alice", "carol", "1"]
+expect.revert = "token:insufficient_allowance"
+
+# ─── supply: mint / burn / burn_from ────────────────────────────────
+
+[[tests]]
+name = "mint_respects_role_and_emits_zero_sentinel"
+
+[[tests.calls]]
+function = "init"
+args     = ["Pyde Demo", "PYDM", "9", "1000000", "0"]
+from     = "alice"
 
 [[tests.calls]]
 function = "mint"
 from     = "alice"
-args     = ["bob", "500"]
-expect.revert = "token: caller is not the owner"
+args     = ["bob", "5000"]
+expect.events = [
+  { name = "Transfer", to = "bob", amount = "5000" },
+]
+
+[[tests.calls]]
+function = "total_supply"
+expect.return_value = "1005000"
+
+[[tests.calls]]
+function = "mint"
+from     = "bob"                  # not the minter
+args     = ["bob", "1"]
+expect.revert = "token:not_minter"
+
+[[tests]]
+name = "mint_above_cap_reverts"
+
+[[tests.calls]]
+function = "init"
+args     = ["Pyde Demo", "PYDM", "9", "1000", "2000"]
+from     = "alice"
+
+[[tests.calls]]
+function = "mint"
+from     = "alice"
+args     = ["bob", "1000"]
+expect.no_revert = true
+
+[[tests.calls]]
+function = "mint"
+from     = "alice"
+args     = ["bob", "1"]
+expect.revert = "token:cap_exceeded"
+
+[[tests]]
+name = "burn_decrements_supply"
+
+[[tests.calls]]
+function = "init"
+args     = ["Pyde Demo", "PYDM", "9", "1000000", "0"]
+from     = "alice"
+
+[[tests.calls]]
+function = "burn"
+from     = "alice"
+args     = ["400"]
+expect.events = [
+  { name = "Transfer", from = "alice", amount = "400" },
+]
+
+[[tests.calls]]
+function = "total_supply"
+expect.return_value = "999600"
+
+[[tests.calls]]
+function = "burn"
+from     = "bob"
+args     = ["1"]
+expect.revert = "token:insufficient_balance"
+
+[[tests]]
+name = "burn_from_spends_allowance"
+
+[[tests.calls]]
+function = "init"
+args     = ["Pyde Demo", "PYDM", "9", "1000000", "0"]
+from     = "alice"
+
+[[tests.calls]]
+function = "approve"
+from     = "alice"
+args     = ["bob", "1000"]
+
+[[tests.calls]]
+function = "burn_from"
+from     = "bob"
+args     = ["alice", "300"]
+expect.no_revert = true
+
+[[tests.calls]]
+function = "total_supply"
+expect.return_value = "999700"
+
+[[tests.calls]]
+function = "allowance"
+args     = ["alice", "bob"]
+expect.return_value = "700"
+
+# ─── roles ──────────────────────────────────────────────────────────
+
+[[tests]]
+name = "role_rotation_and_renounce"
+
+[[tests.calls]]
+function = "init"
+args     = ["Pyde Demo", "PYDM", "9", "1000000", "0"]
+from     = "alice"
+
+[[tests.calls]]
+function = "set_minter"
+from     = "alice"
+args     = ["bob"]
+expect.events = [
+  { name = "RoleTransfer", holder = "bob", previous = "alice" },
+]
+
+[[tests.calls]]
+function = "mint"
+from     = "bob"
+args     = ["carol", "100"]
+expect.no_revert = true
+
+[[tests.calls]]
+function = "set_minter"
+from     = "bob"                  # manager gate, not minter gate
+args     = ["carol"]
+expect.revert = "token:not_manager"
+
+# Renounce the manager: role governance freezes permanently.
+[[tests.calls]]
+function = "set_manager"
+from     = "alice"
+args = [
+  "0x0000000000000000000000000000000000000000000000000000000000000000",
+]
+expect.no_revert = true
+
+[[tests.calls]]
+function = "set_minter"
+from     = "alice"
+args     = ["dave"]
+expect.revert = "token:not_manager"

@@ -1,11 +1,24 @@
-# Pyde contract manifest. `otigen build` reads this as the single source of
-# truth: [state] → typed State accessors, [functions] → dispatch, [events] →
-# Emit helpers — all generated into pyde_gen.go.
+# fungible-token — the PTS-F reference implementation
+#
+# Hand-written reference for the `pts-f/1` fungible-token surface
+# (PIP-0005), in its default extension configuration: no freeze, no
+# pause, open registration, `transfer_call` on, burnable. When the
+# `type = "token"` manifest generation lands in otigen, this contract
+# is what the generator emits for that configuration — until then it
+# is the normative reference and the conformance-vector source.
+#
+# Everything the surface fixes points at a documented loss class:
+# revert-only mutations (no boolean-return ambiguity), delta-only
+# allowances with mandatory TTL-capped expiry (no standing-approval
+# drains), settle-then-notify `transfer_call` with a required
+# acknowledgement (no tokens stranded in unaware contracts, no
+# mid-update hooks), and consent-visible roles renounced by provable
+# zeroing.
 
 [contract]
 name        = "pyde-template"
 version     = "0.1.0"
-description = "A fungible token in Go — balances, allowances, and owner-gated minting."
+description = "PTS-F reference token (pts-f/1): expiring allowances, settle-then-notify transfer_call, role-gated supply."
 type        = "contract"
 
 [contract.lang]
@@ -16,7 +29,7 @@ output   = "build/contract.wasm"
 tinygo_version = "0.41.0"
 
 [deploy]
-gas_limit = 10_000_000
+gas_limit = 50_000_000
 gas_price = "auto"
 
 [network.default]
@@ -26,60 +39,236 @@ name = "devnet"
 rpc_url  = "http://127.0.0.1:9933"
 chain_id = 31337
 
-[state]
-schema = [
-    { name = "owner",        type = "address" },
-    { name = "total_supply", type = "uint128" },
-    { name = "balances",     type = "map", keys = ["address"], value = "uint128" },
-    { name = "allowances",   type = "map", keys = ["address", "address"], value = "uint128" },
+# ─────────────────────────────────────────────────────────────────────
+# Custom types
+# ─────────────────────────────────────────────────────────────────────
+#
+# TokenInfoView aggregates the metadata surface into one free view call
+# (wallets otherwise make five round-trips). Named *View to avoid the Go
+# identifier clash with the token_info() function (the Go generator maps
+# both `token_info` and a `TokenInfo` type to the same exported symbol).
+
+[types.TokenInfoView]
+fields = [
+    { name = "name",            type = "string" },
+    { name = "symbol",          type = "string" },
+    { name = "decimals",        type = "uint8" },
+    { name = "total_supply",    type = "uint128" },
+    { name = "max_supply",      type = "uint128" },
+    { name = "minter",          type = "address" },
+    { name = "extension_flags", type = "uint32" },
 ]
 
-# Constructor — runs once at deploy. Records the deployer as owner and mints
-# the initial supply to them. The chain rejects post-deploy calls to it.
+# ─────────────────────────────────────────────────────────────────────
+# State schema
+# ─────────────────────────────────────────────────────────────────────
+#
+# Parallel-execution property (PIP-0005 §8): an ordinary transfer
+# writes exactly balances[from] and balances[to] and reads no shared
+# mutable cell — total_supply is written ONLY by mint/burn. Disjoint
+# transfers have disjoint write-sets under slot-granular Block-STM.
+
+[state]
+schema = [
+    { name = "token_name",     type = "string" },
+    { name = "token_symbol",   type = "string" },
+    { name = "token_decimals", type = "uint8" },
+    { name = "total_supply",   type = "uint128" },
+    { name = "max_supply",     type = "uint128" },
+
+    { name = "minter",  type = "address" },
+    { name = "manager", type = "address" },
+
+    { name = "balances", type = "map", keys = ["address"], value = "uint128" },
+
+    # One grant = two sibling slots, both keyed (owner, spender) —
+    # pair-unique, so the spend path's write-set stays disjoint across
+    # unrelated parties under Block-STM. (A single packed struct value
+    # at arity 2 is not expressible in the state-schema vocabulary
+    # today; packing is a toolchain extension, not a wire change.)
+    { name = "allowance_amounts",  type = "map", keys = ["address", "address"], value = "uint128" },
+    { name = "allowance_expiries", type = "map", keys = ["address", "address"], value = "uint64" },
+]
+
+# ─────────────────────────────────────────────────────────────────────
+# Entry points — the pts-f/1 surface (PIP-0005 §5–§6)
+# ─────────────────────────────────────────────────────────────────────
+#
+# Conventions (normative): amounts are u128 smallest units; decimals
+# is display-only (default 9 = native quanta parity); mutations return
+# NOTHING — success is no-revert, failure is a canonical machine-
+# readable `token:*` code; no function is payable; names are exact
+# snake_case (dispatch is by name).
+
+# Constructor: metadata + initial supply to the deployer; deployer
+# becomes minter and manager. max_supply = 0 means uncapped.
 [functions.init]
-attributes = ["constructor"]
-inputs     = ["uint128"]
+attributes = ["entry", "constructor"]
+inputs     = ["string", "string", "uint8", "uint128", "uint128"]
 outputs    = []
 
-[functions.transfer]
-attributes = ["entry"]
-inputs     = ["address", "uint128"]
-outputs    = ["bool"]
+# ── views ────────────────────────────────────────────────────────────
 
-[functions.approve]
-attributes = ["entry"]
-inputs     = ["address", "uint128"]
-outputs    = ["bool"]
-
-[functions.transfer_from]
-attributes = ["entry"]
-inputs     = ["address", "address", "uint128"]
-outputs    = ["bool"]
-
-[functions.mint]
-attributes = ["entry"]
-inputs     = ["address", "uint128"]
-outputs    = []
-
-[functions.balance_of]
+[functions.standard]
 attributes = ["entry", "view"]
-inputs     = ["address"]
-outputs    = ["uint128"]
+inputs     = []
+outputs    = ["string"]
 
-[functions.allowance]
+[functions.name]
 attributes = ["entry", "view"]
-inputs     = ["address", "address"]
-outputs    = ["uint128"]
+inputs     = []
+outputs    = ["string"]
+
+[functions.symbol]
+attributes = ["entry", "view"]
+inputs     = []
+outputs    = ["string"]
+
+[functions.decimals]
+attributes = ["entry", "view"]
+inputs     = []
+outputs    = ["uint8"]
 
 [functions.total_supply]
 attributes = ["entry", "view"]
 inputs     = []
 outputs    = ["uint128"]
 
-[functions.owner]
+[functions.max_supply]
+attributes = ["entry", "view"]
+inputs     = []
+outputs    = ["uint128"]
+
+[functions.balance_of]
+attributes = ["entry", "view"]
+inputs     = ["address"]
+outputs    = ["uint128"]
+
+[functions.balance_of_batch]
+attributes = ["entry", "view"]
+inputs     = ["vec(address)"]
+outputs    = ["vec(uint128)"]
+
+# Remaining spendable NOW — reports 0 once expired (lazy; no keeper).
+[functions.allowance]
+attributes = ["entry", "view"]
+inputs     = ["address", "address"]
+outputs    = ["uint128"]
+
+[functions.allowance_expiry]
+attributes = ["entry", "view"]
+inputs     = ["address", "address"]
+outputs    = ["uint64"]
+
+[functions.token_info]
+attributes = ["entry", "view"]
+inputs     = []
+outputs    = ["TokenInfoView"]
+
+[functions.minter]
 attributes = ["entry", "view"]
 inputs     = []
 outputs    = ["address"]
+
+[functions.manager]
+attributes = ["entry", "view"]
+inputs     = []
+outputs    = ["address"]
+
+# ── transfers ────────────────────────────────────────────────────────
+
+# Never invokes recipient code. Reverts on the zero address and the
+# token's own address (the largest measured stuck-token class).
+[functions.transfer]
+attributes = ["entry"]
+inputs     = ["address", "uint128"]
+outputs    = []
+
+# Settle-then-notify: balances fully written and Transfer emitted
+# FIRST, then cross_call `on_token_received(operator, from, amount,
+# data)` on the recipient — which must return ACK_TOKEN or the whole
+# operation reverts `token:bad_receiver` and unwinds atomically.
+[functions.transfer_call]
+attributes = ["entry"]
+inputs     = ["address", "uint128", "vec(uint8)"]
+outputs    = ["uint32"]
+
+# Spends a live (unexpired) allowance of (from, caller).
+[functions.transfer_from]
+attributes = ["entry"]
+inputs     = ["address", "address", "uint128"]
+outputs    = []
+
+# ── delegated spending ───────────────────────────────────────────────
+
+# Compatibility form: sets the allowance to exactly `amount` with the
+# maximum TTL auto-applied. "Unlimited forever" is unrepresentable.
+[functions.approve]
+attributes = ["entry"]
+inputs     = ["address", "uint128"]
+outputs    = []
+
+[functions.increase_allowance]
+attributes = ["entry"]
+inputs     = ["address", "uint128", "uint64"]
+outputs    = []
+
+[functions.decrease_allowance]
+attributes = ["entry"]
+inputs     = ["address", "uint128"]
+outputs    = []
+
+[functions.revoke_allowance]
+attributes = ["entry"]
+inputs     = ["address"]
+outputs    = []
+
+# Compare-and-set: reverts `token:allowance_changed` unless the
+# current effective remaining equals `expected_remaining`. Under
+# commit-reveal the check can fail at reveal time — retriable.
+[functions.set_allowance_exact]
+attributes = ["entry"]
+inputs     = ["address", "uint128", "uint128", "uint64"]
+outputs    = []
+
+# ── supply & roles ───────────────────────────────────────────────────
+
+[functions.mint]
+attributes = ["entry"]
+inputs     = ["address", "uint128"]
+outputs    = []
+
+[functions.burn]
+attributes = ["entry"]
+inputs     = ["uint128"]
+outputs    = []
+
+[functions.burn_from]
+attributes = ["entry"]
+inputs     = ["address", "uint128"]
+outputs    = []
+
+[functions.set_minter]
+attributes = ["entry"]
+inputs     = ["address"]
+outputs    = []
+
+[functions.set_manager]
+attributes = ["entry"]
+inputs     = ["address"]
+outputs    = []
+
+# ─────────────────────────────────────────────────────────────────────
+# Events (PIP-0005 §11)
+# ─────────────────────────────────────────────────────────────────────
+#
+# topic0 = Blake3(signature) — the signature string must list every
+# declared field's type, in order, or subscription filtering breaks.
+# Transfer keeps exactly three fields: byte-identical topic0 with
+# pre-PTS deployments is the compatibility promise. Mint emits
+# from = zero-address, burn emits to = zero-address (one event family
+# carries all supply accounting). The 4th topic is reserved for a
+# pts-f/2 additive extension.
 
 [events.Transfer]
 signature = "Transfer(address,address,uint128)"
@@ -89,10 +278,23 @@ fields = [
     { name = "amount", type = "uint128" },
 ]
 
+# Absolute post-state on every explicit allowance mutation (never on
+# the transfer_from spend path — the hot path emits Transfer only).
 [events.Approval]
-signature = "Approval(address,address,uint128)"
+signature = "Approval(address,address,uint128,uint64)"
 fields = [
-    { name = "owner",   type = "address", indexed = true },
-    { name = "spender", type = "address", indexed = true },
-    { name = "amount",  type = "uint128" },
+    { name = "owner",       type = "address", indexed = true },
+    { name = "spender",     type = "address", indexed = true },
+    { name = "remaining",   type = "uint128" },
+    { name = "expiry_wave", type = "uint64" },
+]
+
+# role is a precomputed 32-byte identifier (Blake3 of the role name —
+# PIP-0005 §3). Renounce is publicly provable as holder = zero.
+[events.RoleTransfer]
+signature = "RoleTransfer(bytes32,address,address)"
+fields = [
+    { name = "role",     type = "bytes32", indexed = true },
+    { name = "holder",   type = "address", indexed = true },
+    { name = "previous", type = "address" },
 ]

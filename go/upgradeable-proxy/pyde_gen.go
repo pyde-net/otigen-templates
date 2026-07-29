@@ -80,32 +80,53 @@ func (__stateValue) Set(v uint64) {
 
 // ── Events ─────────────────────────────────────────────────────────
 
-// EmitAdminTransferred appends a AdminTransferred event to the receipt.
-func EmitAdminTransferred(old_admin pyde.Address, new_admin pyde.Address) {
+// AdminTransferred is the AdminTransferred(address,address) event. Emit it with a named-field
+// literal: AdminTransferred{...}.Emit().
+type AdminTransferred struct {
+	OldAdmin pyde.Address
+	NewAdmin pyde.Address
+}
+
+// Emit appends this AdminTransferred event to the receipt.
+func (ev AdminTransferred) Emit() {
 	topics := []pyde.Bytes32{
 		pyde.EventTopic0("AdminTransferred(address,address)"),
-		pyde.Bytes32(old_admin),
-		pyde.Bytes32(new_admin),
+		pyde.Bytes32(ev.OldAdmin),
+		pyde.Bytes32(ev.NewAdmin),
 	}
 	pyde.Emit(topics, nil)
 }
 
-// EmitInitialized appends a Initialized event to the receipt.
-func EmitInitialized(admin pyde.Address, initial_logic pyde.Address) {
+// Initialized is the Initialized(address,address) event. Emit it with a named-field
+// literal: Initialized{...}.Emit().
+type Initialized struct {
+	Admin        pyde.Address
+	InitialLogic pyde.Address
+}
+
+// Emit appends this Initialized event to the receipt.
+func (ev Initialized) Emit() {
 	topics := []pyde.Bytes32{
 		pyde.EventTopic0("Initialized(address,address)"),
-		pyde.Bytes32(admin),
-		pyde.Bytes32(initial_logic),
+		pyde.Bytes32(ev.Admin),
+		pyde.Bytes32(ev.InitialLogic),
 	}
 	pyde.Emit(topics, nil)
 }
 
-// EmitUpgraded appends a Upgraded event to the receipt.
-func EmitUpgraded(old_logic pyde.Address, new_logic pyde.Address) {
+// Upgraded is the Upgraded(address,address) event. Emit it with a named-field
+// literal: Upgraded{...}.Emit().
+type Upgraded struct {
+	OldLogic pyde.Address
+	NewLogic pyde.Address
+}
+
+// Emit appends this Upgraded event to the receipt.
+func (ev Upgraded) Emit() {
 	topics := []pyde.Bytes32{
 		pyde.EventTopic0("Upgraded(address,address)"),
-		pyde.Bytes32(old_logic),
-		pyde.Bytes32(new_logic),
+		pyde.Bytes32(ev.OldLogic),
+		pyde.Bytes32(ev.NewLogic),
 	}
 	pyde.Emit(topics, nil)
 }

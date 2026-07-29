@@ -1,6 +1,10 @@
 package main
 
-import pyde "github.com/pyde-net/pyde-host/go"
+import (
+	"unicode/utf8"
+
+	pyde "github.com/pyde-net/pyde-host/go"
+)
 
 // upgradeable-proxy — a thin proxy whose logic contract is admin-swappable.
 //
@@ -14,88 +18,118 @@ import pyde "github.com/pyde-net/pyde-host/go"
 // (slots are Poseidon2(self_address ‖ field_name), shared under delegate-call).
 // `value` stays unprefixed — it's the intended shared-state demonstration field.
 
-// Init runs once at deploy (the [constructor]): records the caller as admin and
-// the first logic pointer. Rejects a zero admin or logic — either would brick
-// the proxy.
+// zeroAddress — 32-byte all-zero address, sentinel for an unset / invalid
+// address. Used to reject inputs that would permanently brick the proxy
+// (zero admin = no one can ever upgrade; zero logic = every forward
+// delegate-calls into a non-existent contract).
+var zeroAddress = pyde.Address{}
+
+// Init runs once at deploy (the [constructor]).
 func Init(initialLogic pyde.Address) {
-	if !State.ProxyAdmin.Get().IsZero() {
+	// Defence-in-depth re-init guard. The manifest already tags this function
+	// as ["constructor"] so the chain rejects post-deploy calls — but the
+	// in-source flag catches accidental re-runs in tests + makes the invariant
+	// explicit at the source level.
+	if !State.ProxyAdmin.Get().Equal(zeroAddress) {
 		pyde.Revert("proxy: already initialized")
 	}
 	admin := pyde.Caller()
-	if admin.IsZero() || initialLogic.IsZero() {
+	if admin.Equal(zeroAddress) || initialLogic.Equal(zeroAddress) {
 		pyde.Revert("proxy: init with zero address")
 	}
 	State.ProxyAdmin.Set(admin)
 	State.ProxyLogic.Set(initialLogic)
-	EmitInitialized(admin, initialLogic)
+	Initialized{Admin: admin, InitialLogic: initialLogic}.Emit()
 }
 
-// UpgradeTo swaps the logic pointer. Admin-only. Doesn't touch `value` — the
+// UpgradeTo is the admin-only logic-pointer swap. Doesn't touch `value` — the
 // preserved state is the whole point.
 func UpgradeTo(newLogic pyde.Address) {
-	requireAdmin()
-	if newLogic.IsZero() {
+	admin := State.ProxyAdmin.Get()
+	caller := pyde.Caller()
+	if !caller.Equal(admin) {
+		pyde.Revert("proxy: caller is not admin")
+	}
+	if newLogic.Equal(zeroAddress) {
 		pyde.Revert("proxy: upgrade to zero address")
 	}
 	oldLogic := State.ProxyLogic.Get()
 	State.ProxyLogic.Set(newLogic)
-	EmitUpgraded(oldLogic, newLogic)
+	Upgraded{OldLogic: oldLogic, NewLogic: newLogic}.Emit()
 }
 
 // TransferAdmin rotates the admin role. Admin-only. Reverts on a zero-address
-// new admin — use RenounceAdmin for that so the irrevocable lock is loud.
+// new admin — use RenounceAdmin for that path so the irrevocable lock is loud
+// rather than disguised as a transfer.
 func TransferAdmin(newAdmin pyde.Address) {
-	admin := requireAdmin()
-	if newAdmin.IsZero() {
+	admin := State.ProxyAdmin.Get()
+	caller := pyde.Caller()
+	if !caller.Equal(admin) {
+		pyde.Revert("proxy: caller is not admin")
+	}
+	if newAdmin.Equal(zeroAddress) {
 		pyde.Revert("proxy: transfer to zero address; use renounce_admin")
 	}
+	oldAdmin := admin
 	State.ProxyAdmin.Set(newAdmin)
-	EmitAdminTransferred(admin, newAdmin)
+	AdminTransferred{OldAdmin: oldAdmin, NewAdmin: newAdmin}.Emit()
 }
 
-// RenounceAdmin sets the admin to the zero address, freezing the logic pointer
-// forever. Irreversible.
+// RenounceAdmin renounces the admin role — sets the admin slot to the zero
+// address. After this call NO ONE can UpgradeTo or call any admin-gated entry;
+// the logic pointer is frozen at its current value forever. Irreversible.
 func RenounceAdmin() {
-	admin := requireAdmin()
-	State.ProxyAdmin.Set(pyde.Address{})
-	EmitAdminTransferred(admin, pyde.Address{})
+	admin := State.ProxyAdmin.Get()
+	caller := pyde.Caller()
+	if !caller.Equal(admin) {
+		pyde.Revert("proxy: caller is not admin")
+	}
+	State.ProxyAdmin.Set(zeroAddress)
+	AdminTransferred{OldAdmin: admin, NewAdmin: zeroAddress}.Emit()
 }
 
-// Forward delegate-calls logic.function(calldata) in this contract's frame and
-// returns the logic's raw return bytes verbatim — the caller decodes them per
-// the logic function's documented return type.
+// Forward delegate-calls logic.function(calldata) in this contract's frame.
+// Returns the raw bytes the logic produced as its return payload — the caller
+// decodes them per the function's documented return type.
 func Forward(function string, calldata []byte) []byte {
 	logic := State.ProxyLogic.Get()
 	out, rc := pyde.DelegateCall(logic, function).Args(calldata).Exec()
-	if rc != pyde.StatusOK {
-		// The Go delegate-call surfaces a status code, not the logic's revert
-		// payload, so we map the common cases to clear proxy-level messages.
-		if rc == pyde.ErrInvalidFunctionName {
-			pyde.Revert("proxy: logic has no such function")
+	switch rc {
+	case pyde.StatusOK:
+		return out
+	case pyde.ErrInvalidFunctionName:
+		// Mirrors Rust's Err(CallError::InvalidFunction).
+		pyde.Revert("proxy: logic has no such function")
+	case pyde.ErrInsufficientBalance, pyde.ErrReentrancyBlocked, pyde.ErrValueTransferNotPayable:
+		// Mirrors Rust's Err(_) over the non-Reverted call-error variants.
+		pyde.Revert("proxy: delegate-call failed")
+	default:
+		// Rust's CallError::Reverted(payload): pass the logic's revert string
+		// straight through to the proxy's caller so they see exactly what the
+		// logic said, not a generic "proxy failed" message. Falls back to the
+		// generic message when the payload isn't valid UTF-8.
+		if utf8.Valid(out) {
+			pyde.Revert(string(out))
 		}
 		pyde.Revert("proxy: delegate-call failed")
 	}
-	return out
+	return nil
 }
 
 // GetAdmin returns the current admin (zero if renounced).
-func GetAdmin() pyde.Address { return State.ProxyAdmin.Get() }
+func GetAdmin() pyde.Address {
+	return State.ProxyAdmin.Get()
+}
 
 // GetLogic returns the current logic pointer.
-func GetLogic() pyde.Address { return State.ProxyLogic.Get() }
+func GetLogic() pyde.Address {
+	return State.ProxyLogic.Get()
+}
 
 // GetValue reads the shared `value` slot the logic contract writes through the
-// proxy — it survives upgrades.
-func GetValue() uint64 { return State.Value.Get() }
-
-// requireAdmin reverts unless the caller is the recorded admin, returning that
-// admin address for the event payload.
-func requireAdmin() pyde.Address {
-	admin := State.ProxyAdmin.Get()
-	if !pyde.Caller().Equal(admin) {
-		pyde.Revert("proxy: caller is not admin")
-	}
-	return admin
+// proxy.
+func GetValue() uint64 {
+	return State.Value.Get()
 }
 
 // main is required by TinyGo's wasm target; the chain dispatches the generated

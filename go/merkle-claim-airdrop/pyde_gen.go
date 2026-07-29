@@ -125,25 +125,39 @@ func (__stateClaimed) Delete(k0 pyde.Address) {
 
 // ── Events ─────────────────────────────────────────────────────────
 
-// EmitClaim appends a Claim event to the receipt.
-func EmitClaim(claimant pyde.Address, amount pyde.U128) {
+// ClaimEvent is the Claim(address,uint128) event. Emit it with a named-field
+// literal: ClaimEvent{...}.Emit().
+type ClaimEvent struct {
+	Claimant pyde.Address
+	Amount   pyde.U128
+}
+
+// Emit appends this Claim event to the receipt.
+func (ev ClaimEvent) Emit() {
 	topics := []pyde.Bytes32{
 		pyde.EventTopic0("Claim(address,uint128)"),
-		pyde.Bytes32(claimant),
+		pyde.Bytes32(ev.Claimant),
 	}
 	e := pyde.NewEncoder()
-	e.U128(amount)
+	e.U128(ev.Amount)
 	pyde.Emit(topics, e.Finish())
 }
 
-// EmitFunded appends a Funded event to the receipt.
-func EmitFunded(from pyde.Address, amount pyde.U128) {
+// Funded is the Funded(address,uint128) event. Emit it with a named-field
+// literal: Funded{...}.Emit().
+type Funded struct {
+	From   pyde.Address
+	Amount pyde.U128
+}
+
+// Emit appends this Funded event to the receipt.
+func (ev Funded) Emit() {
 	topics := []pyde.Bytes32{
 		pyde.EventTopic0("Funded(address,uint128)"),
-		pyde.Bytes32(from),
+		pyde.Bytes32(ev.From),
 	}
 	e := pyde.NewEncoder()
-	e.U128(amount)
+	e.U128(ev.Amount)
 	pyde.Emit(topics, e.Finish())
 }
 

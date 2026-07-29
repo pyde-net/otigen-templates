@@ -1,0 +1,101 @@
+# `vesting` — time-based linear vesting (with cliff) contract manifest.
+
+[contract]
+name        = "pyde-template"
+version     = "0.1.0"
+description = "Linear vesting with cliff — canonical Pyde time-locked allocation example."
+type        = "contract"
+
+[contract.lang]
+language = "go"
+output   = "build/contract.wasm"
+
+[contract.lang.toolchain]
+tinygo_version = "0.41.0"
+
+[deploy]
+gas_limit = 10_000_000
+gas_price = "auto"
+
+[network.default]
+name = "devnet"
+
+[network.devnet]
+rpc_url  = "http://127.0.0.1:9933"
+chain_id = 31337
+
+[state]
+schema = [
+    { name = "beneficiary",      type = "address" },
+    { name = "total_amount",     type = "uint128" },
+    { name = "start_time",       type = "uint64" },
+    { name = "cliff_seconds",    type = "uint64" },
+    { name = "duration_seconds", type = "uint64" },
+    { name = "released",         type = "uint128" },
+    { name = "configured",       type = "bool" },
+]
+
+# Constructor — runs once at deploy. Rejects post-deploy calls at the
+# chain level; the in-source `configured` flag is defence in depth.
+[functions.configure]
+attributes = ["constructor"]
+inputs     = ["address", "uint128", "uint64", "uint64", "uint64"]
+outputs    = []
+
+# Payable funding entry. The contract has zero balance immediately
+# after deploy; `release` will revert with `TransferFailed` until
+# someone funds it via `fund()` (or a direct value transfer).
+[functions.fund]
+attributes = ["entry", "payable"]
+inputs     = []
+outputs    = []
+
+[functions.release]
+attributes = ["entry"]
+inputs     = []
+outputs    = ["uint128"]
+
+[functions.vested_amount]
+attributes = ["entry", "view"]
+inputs     = []
+outputs    = ["uint128"]
+
+[functions.releasable]
+attributes = ["entry", "view"]
+inputs     = []
+outputs    = ["uint128"]
+
+[functions.released_amount]
+attributes = ["entry", "view"]
+inputs     = []
+outputs    = ["uint128"]
+
+[functions.configured_flag]
+attributes = ["entry", "view"]
+inputs     = []
+outputs    = ["bool"]
+
+[events.Configured]
+signature = "Configured(address,uint128,uint64,uint64,uint64)"
+fields = [
+    { name = "beneficiary",      type = "address", indexed = true },
+    { name = "total_amount",     type = "uint128" },
+    { name = "start_time",       type = "uint64" },
+    { name = "cliff_seconds",    type = "uint64" },
+    { name = "duration_seconds", type = "uint64" },
+]
+
+[events.Released]
+signature = "Released(address,uint128,uint128)"
+fields = [
+    { name = "beneficiary",    type = "address", indexed = true },
+    { name = "amount",         type = "uint128" },
+    { name = "total_released", type = "uint128" },
+]
+
+[events.Funded]
+signature = "Funded(address,uint128)"
+fields = [
+    { name = "from",   type = "address", indexed = true },
+    { name = "amount", type = "uint128" },
+]
