@@ -1,11 +1,11 @@
-# pyde-template — daily development loop.
+# merkle-claim-airdrop — daily development loop.
 
-.DEFAULT_GOAL := help
+.DEFAULT_GOAL := build
 
 .PHONY: help check-tools build clang-build test test-v test-vv test-vvv test-vvvv \
         deploy inspect verify clean
 
-NAME := pyde-template
+NAME := merkle-claim-airdrop
 
 # clang from PATH. On macOS install LLVM + lld via brew (see README).
 # wasm-ld must also be on PATH — the linker driver invokes it by name.
@@ -16,11 +16,10 @@ NAME := pyde-template
 # clang on PATH). Override with `make CC=/path build` if needed.
 CC      := clang
 CFLAGS  := --target=wasm32 -nostdlib -Wl,--no-entry -Wl,--export-dynamic \
-           -Iinclude \
            -O3 -flto -fvisibility=hidden -fno-builtin-memcpy -fno-builtin-memset
 
 help:
-	@printf "pyde-template — development targets:\n\n"
+	@printf "merkle-claim-airdrop — development targets:\n\n"
 	@printf "  make build         otigen build (generates pyde_gen.h + clang)\n"
 	@printf "  make test          otigen test (default verbosity)\n"
 	@printf "  make test-v        otigen test -v        (+ gas + duration)\n"
@@ -34,31 +33,23 @@ help:
 	@printf "  make check-tools   verify clang / wasm-ld / otigen are present\n"
 
 check-tools:
-	@command -v $(CC) >/dev/null 2>&1 \
-		|| (echo "missing: $(CC) (brew install llvm, or set CC=/path/to/clang)"; exit 1)
-	@$(CC) -print-targets 2>&1 | grep -q wasm32 \
-		|| (echo "$(CC) lacks the wasm32 backend — use brew's LLVM (brew install llvm) or set CC to a wasm-capable clang"; exit 1)
-	@ccdir=$$(dirname "$$(command -v $(CC))"); \
-		command -v wasm-ld >/dev/null 2>&1 || [ -x "$$ccdir/wasm-ld" ] \
-		|| (echo "missing: wasm-ld (brew install lld, add to PATH, or ensure it sits beside $(CC))"; exit 1)
-	@command -v otigen >/dev/null 2>&1 \
-		|| (echo "missing: otigen (install via https://github.com/pyde-net/otigen/releases)"; exit 1)
+	@command -v clang   >/dev/null || (echo "missing: clang (brew install llvm; add to PATH)"; exit 1)
+	@command -v wasm-ld >/dev/null || (echo "missing: wasm-ld (brew install lld; add to PATH)"; exit 1)
+	@command -v otigen  >/dev/null || (echo "missing: otigen (install via https://github.com/pyde-net/otigen/releases)"; exit 1)
+	@clang -print-targets 2>&1 | grep -q wasm32 \
+		|| (echo "clang lacks wasm32 backend — try brew's LLVM rather than Apple's bundled clang"; exit 1)
 	@echo "OK"
 
-# Escape hatch: compile main.c directly. Requires pyde_gen.h to exist
-# already (run `otigen build` once first) — main.c #includes it.
+# Escape hatch: compile main.c directly with clang. Requires pyde_gen.h to
+# already exist (run `otigen build` once first) — main.c #includes it.
 clang-build:
 	@mkdir -p build
 	$(CC) $(CFLAGS) -o build/contract.wasm main.c
 
 # `otigen build` generates pyde_gen.h from otigen.toml and then invokes clang
-# itself (same flags as above), so we do NOT run clang ahead of it — that
+# itself (with the flags above), so we do NOT run clang ahead of it — that
 # ordering would try to compile main.c before the generated header exists.
-#
-# `check-tools` runs first so a missing compiler / wasm-ld / otigen, or an
-# Apple clang without the wasm32 backend, surfaces a one-liner the user can act
-# on rather than the cryptic `unrecognized target` from clang.
-build: check-tools
+build:
 	otigen build
 
 test: build

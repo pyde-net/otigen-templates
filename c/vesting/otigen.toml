@@ -1,0 +1,123 @@
+# `vesting` — time-based linear vesting (with cliff) contract manifest.
+
+[contract]
+name        = "pyde-template"
+version     = "0.1.0"
+description = "Linear vesting with cliff — canonical Pyde time-locked allocation example."
+type        = "contract"
+
+[contract.lang]
+language = "c"
+output   = "build/contract.wasm"
+
+[contract.lang.toolchain]
+clang_version = "18"
+
+[deploy]
+gas_limit = 10_000_000
+gas_price = "auto"
+
+[network.default]
+name = "devnet"
+
+[network.devnet]
+rpc_url  = "http://127.0.0.1:9933"
+chain_id = 31337
+
+[state]
+schema = [
+    { name = "beneficiary",      type = "address" },
+    { name = "total_amount",     type = "uint128" },
+    { name = "start_time",       type = "uint64" },
+    { name = "cliff_seconds",    type = "uint64" },
+    { name = "duration_seconds", type = "uint64" },
+    { name = "released",         type = "uint128" },
+    { name = "configured",       type = "bool" },
+]
+
+# Constructor — runs once at deploy. Rejects post-deploy calls at the
+# chain level; the in-source `storage::configured` flag is defence in
+# depth.
+[functions.configure]
+attributes = ["constructor"]
+inputs     = ["address", "uint128", "uint64", "uint64", "uint64"]
+outputs    = []
+
+# Payable funding entry. The contract has zero balance immediately
+# after deploy; `release` will revert with `TransferFailed` until
+# someone funds it via `fund()` (or a direct value transfer).
+[functions.fund]
+attributes = ["entry", "payable"]
+inputs     = []
+outputs    = []
+
+[functions.release]
+attributes = ["entry"]
+inputs     = []
+outputs    = ["uint128"]
+
+[functions.vested_amount]
+attributes = ["entry", "view"]
+inputs     = []
+outputs    = ["uint128"]
+
+[functions.releasable]
+attributes = ["entry", "view"]
+inputs     = []
+outputs    = ["uint128"]
+
+[functions.released_amount]
+attributes = ["entry", "view"]
+inputs     = []
+outputs    = ["uint128"]
+
+[functions.configured_flag]
+attributes = ["entry", "view"]
+inputs     = []
+outputs    = ["bool"]
+
+[events.Configured]
+signature = "Configured(address,uint128,uint64,uint64,uint64)"
+fields = [
+    { name = "beneficiary",      type = "address", indexed = true },
+    { name = "total_amount",     type = "uint128" },
+    { name = "start_time",       type = "uint64" },
+    { name = "cliff_seconds",    type = "uint64" },
+    { name = "duration_seconds", type = "uint64" },
+]
+
+[events.Released]
+signature = "Released(address,uint128,uint128)"
+fields = [
+    { name = "beneficiary",    type = "address", indexed = true },
+    { name = "amount",         type = "uint128" },
+    { name = "total_released", type = "uint128" },
+]
+
+[events.Funded]
+signature = "Funded(address,uint128)"
+fields = [
+    { name = "from",   type = "address", indexed = true },
+    { name = "amount", type = "uint128" },
+]
+
+# ─────────────────────────────────────────────────────────────────────
+# Optional: [metadata] — public info surfaced by explorers, wallets, and
+# `otigen inspect`. Every field is optional; uncomment what you want.
+# The values below show each field's accepted shape and validate as-is.
+#
+# [metadata]
+# name              = "my-contract"                       # display name, lowercase [a-z0-9-] (may differ from contract.name)
+# description       = "One-line summary of what this contract does."   # < 1000 chars
+# website           = "https://example.com"               # https:// URL
+# logo_url          = "https://example.com/logo.png"      # https:// URL
+# repository_url    = "https://github.com/pyde-net/example"  # https:// URL
+# documentation_url = "https://docs.example.com"          # https:// URL
+# license           = "MIT"                               # SPDX id: MIT, Apache-2.0, GPL-3.0-only, BUSL-1.1, … (SPDX_IDENTIFIERS)
+# authors           = ["Ada Lovelace <ada@example.com>"]  # "Name <email>" strings, ≤ 32 entries
+# tags              = ["defi", "example"]                 # slugs [a-z0-9-], ≤ 32 entries
+# declared_category = "app"                               # token|nft|dao|dex|lending|vault|oracle|bridge|multisig|staking|proxy|escrow|launchpad|registry|marketplace|payment|insurance|game|cred|rwa|app
+# twitter           = "https://x.com/pydenet"             # full URL, or bare handle "pydenet" (no @, [A-Za-z0-9_] ≤ 15)
+# github            = "https://github.com/pyde-net"        # full URL, or bare org/user handle "pyde-net"
+# telegram          = "https://t.me/pydenet"               # full URL, or bare channel handle "pydenet"
+# discord           = "https://discord.gg/pydenet"         # full URL, or bare server handle

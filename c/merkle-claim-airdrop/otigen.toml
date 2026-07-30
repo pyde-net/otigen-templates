@@ -1,0 +1,121 @@
+# `merkle-claim-airdrop` — proof-of-inclusion airdrop manifest.
+
+[contract]
+name        = "pyde-template"
+version     = "0.1.0"
+description = "Merkle-tree airdrop claim — canonical Pyde proof-of-inclusion example."
+type        = "contract"
+
+[contract.lang]
+language = "c"
+output   = "build/contract.wasm"
+
+[contract.lang.toolchain]
+clang_version = "18"
+
+[deploy]
+gas_limit = 10_000_000
+gas_price = "auto"
+
+[network.default]
+name = "devnet"
+
+[network.devnet]
+rpc_url  = "http://127.0.0.1:9933"
+chain_id = 31337
+
+# State schema. Five typed-storage fields:
+#
+#  - `admin` (scalar address): set by `init()`, gates `set_root`.
+#  - `merkle_root` (scalar bytes32): root committed at deploy time.
+#  - `root_set` (scalar bool): one-shot init flag for `set_root`.
+#  - `total_claimed` (scalar uint128): cumulative tokens claimed.
+#  - `claimed` (map<address, bool>): per-account claim flag.
+[state]
+schema = [
+    { name = "admin",         type = "address" },
+    { name = "merkle_root",   type = "bytes32" },
+    { name = "root_set",      type = "bool" },
+    { name = "total_claimed", type = "uint128" },
+    { name = "claimed",       type = "map", keys = ["address"], value = "bool" },
+]
+
+# Constructor — records the caller as the contract admin. Chain
+# rejects post-deploy calls; in-source `admin != ZERO_ADDRESS` guard
+# is defence in depth.
+[functions.init]
+attributes = ["constructor"]
+inputs     = []
+outputs    = []
+
+# Payable funding entry. The contract has zero balance immediately
+# after deploy; `claim` will revert with `TransferFailed` until
+# someone funds it via `fund()` (or a direct value transfer).
+[functions.fund]
+attributes = ["entry", "payable"]
+inputs     = []
+outputs    = []
+
+[functions.set_root]
+attributes = ["entry"]
+inputs     = ["bytes32"]
+outputs    = []
+
+[functions.claim]
+attributes = ["entry"]
+inputs     = ["uint128", "bytes"]
+outputs    = []
+
+[functions.is_claimed]
+attributes = ["entry", "view"]
+inputs     = ["address"]
+outputs    = ["bool"]
+
+[functions.total_claimed]
+attributes = ["entry", "view"]
+inputs     = []
+outputs    = ["uint128"]
+
+[functions.merkle_root_first_byte]
+attributes = ["entry", "view"]
+inputs     = []
+outputs    = ["int64"]
+
+# `Claim(claimant indexed, amount)` — topic-0 (signature hash) +
+# topic-1 (claimant address) + 16-byte amount payload.
+[events.Claim]
+signature = "Claim(address,uint128)"
+fields = [
+    { name = "claimant", type = "address", indexed = true },
+    { name = "amount",   type = "uint128" },
+]
+
+# `Funded(from indexed, amount)` — emitted by `fund()` so off-chain
+# accounting can attribute deposits to the funder.
+[events.Funded]
+signature = "Funded(address,uint128)"
+fields = [
+    { name = "from",   type = "address", indexed = true },
+    { name = "amount", type = "uint128" },
+]
+
+# ─────────────────────────────────────────────────────────────────────
+# Optional: [metadata] — public info surfaced by explorers, wallets, and
+# `otigen inspect`. Every field is optional; uncomment what you want.
+# The values below show each field's accepted shape and validate as-is.
+#
+# [metadata]
+# name              = "my-contract"                       # display name, lowercase [a-z0-9-] (may differ from contract.name)
+# description       = "One-line summary of what this contract does."   # < 1000 chars
+# website           = "https://example.com"               # https:// URL
+# logo_url          = "https://example.com/logo.png"      # https:// URL
+# repository_url    = "https://github.com/pyde-net/example"  # https:// URL
+# documentation_url = "https://docs.example.com"          # https:// URL
+# license           = "MIT"                               # SPDX id: MIT, Apache-2.0, GPL-3.0-only, BUSL-1.1, … (SPDX_IDENTIFIERS)
+# authors           = ["Ada Lovelace <ada@example.com>"]  # "Name <email>" strings, ≤ 32 entries
+# tags              = ["defi", "example"]                 # slugs [a-z0-9-], ≤ 32 entries
+# declared_category = "app"                               # token|nft|dao|dex|lending|vault|oracle|bridge|multisig|staking|proxy|escrow|launchpad|registry|marketplace|payment|insurance|game|cred|rwa|app
+# twitter           = "https://x.com/pydenet"             # full URL, or bare handle "pydenet" (no @, [A-Za-z0-9_] ≤ 15)
+# github            = "https://github.com/pyde-net"        # full URL, or bare org/user handle "pyde-net"
+# telegram          = "https://t.me/pydenet"               # full URL, or bare channel handle "pydenet"
+# discord           = "https://discord.gg/pydenet"         # full URL, or bare server handle

@@ -1,0 +1,319 @@
+# fungible-token — the PTS-F reference implementation
+#
+# Hand-written reference for the `pts-f/1` fungible-token surface
+# (PIP-0005), in its default extension configuration: no freeze, no
+# pause, open registration, `transfer_call` on, burnable. When the
+# `type = "token"` manifest generation lands in otigen, this contract
+# is what the generator emits for that configuration — until then it
+# is the normative reference and the conformance-vector source.
+#
+# Everything the surface fixes points at a documented loss class:
+# revert-only mutations (no boolean-return ambiguity), delta-only
+# allowances with mandatory TTL-capped expiry (no standing-approval
+# drains), settle-then-notify `transfer_call` with a required
+# acknowledgement (no tokens stranded in unaware contracts, no
+# mid-update hooks), and consent-visible roles renounced by provable
+# zeroing.
+
+[contract]
+name        = "pyde-template"
+version     = "0.1.0"
+description = "PTS-F reference token (pts-f/1): expiring allowances, settle-then-notify transfer_call, role-gated supply."
+type        = "contract"
+
+[contract.lang]
+language = "c"
+output   = "build/contract.wasm"
+
+[contract.lang.toolchain]
+clang_version = "18"
+
+[deploy]
+gas_limit = 50_000_000
+gas_price = "auto"
+
+[network.default]
+name = "devnet"
+
+[network.devnet]
+rpc_url  = "http://127.0.0.1:9933"
+chain_id = 31337
+
+# ─────────────────────────────────────────────────────────────────────
+# Custom types
+# ─────────────────────────────────────────────────────────────────────
+#
+# TokenInfo aggregates the metadata surface into one free view call
+# (wallets otherwise make five round-trips).
+
+[types.TokenInfo]
+fields = [
+    { name = "name",            type = "string" },
+    { name = "symbol",          type = "string" },
+    { name = "decimals",        type = "uint8" },
+    { name = "total_supply",    type = "uint128" },
+    { name = "max_supply",      type = "uint128" },
+    { name = "minter",          type = "address" },
+    { name = "extension_flags", type = "uint32" },
+]
+
+# ─────────────────────────────────────────────────────────────────────
+# State schema
+# ─────────────────────────────────────────────────────────────────────
+#
+# Parallel-execution property (PIP-0005 §8): an ordinary transfer
+# writes exactly balances[from] and balances[to] and reads no shared
+# mutable cell — total_supply is written ONLY by mint/burn. Disjoint
+# transfers have disjoint write-sets under slot-granular Block-STM.
+
+[state]
+schema = [
+    { name = "token_name",     type = "string" },
+    { name = "token_symbol",   type = "string" },
+    { name = "token_decimals", type = "uint8" },
+    { name = "total_supply",   type = "uint128" },
+    { name = "max_supply",     type = "uint128" },
+
+    { name = "minter",  type = "address" },
+    { name = "manager", type = "address" },
+
+    { name = "balances", type = "map", keys = ["address"], value = "uint128" },
+
+    # One grant = two sibling slots, both keyed (owner, spender) —
+    # pair-unique, so the spend path's write-set stays disjoint across
+    # unrelated parties under Block-STM. (A single packed struct value
+    # at arity 2 is not expressible in the state-schema vocabulary
+    # today; packing is a toolchain extension, not a wire change.)
+    { name = "allowance_amounts",  type = "map", keys = ["address", "address"], value = "uint128" },
+    { name = "allowance_expiries", type = "map", keys = ["address", "address"], value = "uint64" },
+]
+
+# ─────────────────────────────────────────────────────────────────────
+# Entry points — the pts-f/1 surface (PIP-0005 §5–§6)
+# ─────────────────────────────────────────────────────────────────────
+#
+# Conventions (normative): amounts are u128 smallest units; decimals
+# is display-only (default 9 = native quanta parity); mutations return
+# NOTHING — success is no-revert, failure is a canonical machine-
+# readable `token:*` code; no function is payable; names are exact
+# snake_case (dispatch is by name).
+
+# Constructor: metadata + initial supply to the deployer; deployer
+# becomes minter and manager. max_supply = 0 means uncapped.
+[functions.init]
+attributes = ["entry", "constructor"]
+inputs     = ["string", "string", "uint8", "uint128", "uint128"]
+outputs    = []
+
+# ── views ────────────────────────────────────────────────────────────
+
+[functions.standard]
+attributes = ["entry", "view"]
+inputs     = []
+outputs    = ["string"]
+
+[functions.name]
+attributes = ["entry", "view"]
+inputs     = []
+outputs    = ["string"]
+
+[functions.symbol]
+attributes = ["entry", "view"]
+inputs     = []
+outputs    = ["string"]
+
+[functions.decimals]
+attributes = ["entry", "view"]
+inputs     = []
+outputs    = ["uint8"]
+
+[functions.total_supply]
+attributes = ["entry", "view"]
+inputs     = []
+outputs    = ["uint128"]
+
+[functions.max_supply]
+attributes = ["entry", "view"]
+inputs     = []
+outputs    = ["uint128"]
+
+[functions.balance_of]
+attributes = ["entry", "view"]
+inputs     = ["address"]
+outputs    = ["uint128"]
+
+[functions.balance_of_batch]
+attributes = ["entry", "view"]
+inputs     = ["vec(address)"]
+outputs    = ["vec(uint128)"]
+
+# Remaining spendable NOW — reports 0 once expired (lazy; no keeper).
+[functions.allowance]
+attributes = ["entry", "view"]
+inputs     = ["address", "address"]
+outputs    = ["uint128"]
+
+[functions.allowance_expiry]
+attributes = ["entry", "view"]
+inputs     = ["address", "address"]
+outputs    = ["uint64"]
+
+[functions.token_info]
+attributes = ["entry", "view"]
+inputs     = []
+outputs    = ["TokenInfo"]
+
+[functions.minter]
+attributes = ["entry", "view"]
+inputs     = []
+outputs    = ["address"]
+
+[functions.manager]
+attributes = ["entry", "view"]
+inputs     = []
+outputs    = ["address"]
+
+# ── transfers ────────────────────────────────────────────────────────
+
+# Never invokes recipient code. Reverts on the zero address and the
+# token's own address (the largest measured stuck-token class).
+[functions.transfer]
+attributes = ["entry"]
+inputs     = ["address", "uint128"]
+outputs    = []
+
+# Settle-then-notify: balances fully written and Transfer emitted
+# FIRST, then cross_call `on_token_received(operator, from, amount,
+# data)` on the recipient — which must return ACK_TOKEN or the whole
+# operation reverts `token:bad_receiver` and unwinds atomically.
+[functions.transfer_call]
+attributes = ["entry"]
+inputs     = ["address", "uint128", "vec(uint8)"]
+outputs    = ["uint32"]
+
+# Spends a live (unexpired) allowance of (from, caller).
+[functions.transfer_from]
+attributes = ["entry"]
+inputs     = ["address", "address", "uint128"]
+outputs    = []
+
+# ── delegated spending ───────────────────────────────────────────────
+
+# Compatibility form: sets the allowance to exactly `amount` with the
+# maximum TTL auto-applied. "Unlimited forever" is unrepresentable.
+[functions.approve]
+attributes = ["entry"]
+inputs     = ["address", "uint128"]
+outputs    = []
+
+[functions.increase_allowance]
+attributes = ["entry"]
+inputs     = ["address", "uint128", "uint64"]
+outputs    = []
+
+[functions.decrease_allowance]
+attributes = ["entry"]
+inputs     = ["address", "uint128"]
+outputs    = []
+
+[functions.revoke_allowance]
+attributes = ["entry"]
+inputs     = ["address"]
+outputs    = []
+
+# Compare-and-set: reverts `token:allowance_changed` unless the
+# current effective remaining equals `expected_remaining`. Under
+# commit-reveal the check can fail at reveal time — retriable.
+[functions.set_allowance_exact]
+attributes = ["entry"]
+inputs     = ["address", "uint128", "uint128", "uint64"]
+outputs    = []
+
+# ── supply & roles ───────────────────────────────────────────────────
+
+[functions.mint]
+attributes = ["entry"]
+inputs     = ["address", "uint128"]
+outputs    = []
+
+[functions.burn]
+attributes = ["entry"]
+inputs     = ["uint128"]
+outputs    = []
+
+[functions.burn_from]
+attributes = ["entry"]
+inputs     = ["address", "uint128"]
+outputs    = []
+
+[functions.set_minter]
+attributes = ["entry"]
+inputs     = ["address"]
+outputs    = []
+
+[functions.set_manager]
+attributes = ["entry"]
+inputs     = ["address"]
+outputs    = []
+
+# ─────────────────────────────────────────────────────────────────────
+# Events (PIP-0005 §11)
+# ─────────────────────────────────────────────────────────────────────
+#
+# topic0 = Blake3(signature) — the signature string must list every
+# declared field's type, in order, or subscription filtering breaks.
+# Transfer keeps exactly three fields: byte-identical topic0 with
+# pre-PTS deployments is the compatibility promise. Mint emits
+# from = zero-address, burn emits to = zero-address (one event family
+# carries all supply accounting). The 4th topic is reserved for a
+# pts-f/2 additive extension.
+
+[events.Transfer]
+signature = "Transfer(address,address,uint128)"
+fields = [
+    { name = "from",   type = "address", indexed = true },
+    { name = "to",     type = "address", indexed = true },
+    { name = "amount", type = "uint128" },
+]
+
+# Absolute post-state on every explicit allowance mutation (never on
+# the transfer_from spend path — the hot path emits Transfer only).
+[events.Approval]
+signature = "Approval(address,address,uint128,uint64)"
+fields = [
+    { name = "owner",       type = "address", indexed = true },
+    { name = "spender",     type = "address", indexed = true },
+    { name = "remaining",   type = "uint128" },
+    { name = "expiry_wave", type = "uint64" },
+]
+
+# role is a precomputed 32-byte identifier (Blake3 of the role name —
+# PIP-0005 §3). Renounce is publicly provable as holder = zero.
+[events.RoleTransfer]
+signature = "RoleTransfer(bytes32,address,address)"
+fields = [
+    { name = "role",     type = "bytes32", indexed = true },
+    { name = "holder",   type = "address", indexed = true },
+    { name = "previous", type = "address" },
+]
+
+# ─────────────────────────────────────────────────────────────────────
+# Optional: [metadata] — public info surfaced by explorers, wallets, and
+# `otigen inspect`. Every field is optional; uncomment what you want.
+# The values below show each field's accepted shape and validate as-is.
+#
+# [metadata]
+# name              = "my-contract"                       # display name, lowercase [a-z0-9-] (may differ from contract.name)
+# description       = "One-line summary of what this contract does."   # < 1000 chars
+# website           = "https://example.com"               # https:// URL
+# logo_url          = "https://example.com/logo.png"      # https:// URL
+# repository_url    = "https://github.com/pyde-net/example"  # https:// URL
+# documentation_url = "https://docs.example.com"          # https:// URL
+# license           = "MIT"                               # SPDX id: MIT, Apache-2.0, GPL-3.0-only, BUSL-1.1, … (SPDX_IDENTIFIERS)
+# authors           = ["Ada Lovelace <ada@example.com>"]  # "Name <email>" strings, ≤ 32 entries
+# tags              = ["defi", "example"]                 # slugs [a-z0-9-], ≤ 32 entries
+# declared_category = "app"                               # token|nft|dao|dex|lending|vault|oracle|bridge|multisig|staking|proxy|escrow|launchpad|registry|marketplace|payment|insurance|game|cred|rwa|app
+# twitter           = "https://x.com/pydenet"             # full URL, or bare handle "pydenet" (no @, [A-Za-z0-9_] ≤ 15)
+# github            = "https://github.com/pyde-net"        # full URL, or bare org/user handle "pyde-net"
+# telegram          = "https://t.me/pydenet"               # full URL, or bare channel handle "pydenet"
+# discord           = "https://discord.gg/pydenet"         # full URL, or bare server handle

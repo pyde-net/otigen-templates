@@ -1,0 +1,590 @@
+# vesting behaviour tests.
+#
+# Time-travel works via per-test `[tests.cheats].now` overrides — the
+# runner injects that value as `wave_timestamp()`'s return. Each
+# test runs from a fresh state, so every test calls `configure()`
+# first.
+#
+# Common config used across tests:
+#
+#   beneficiary       = alice
+#   total_amount      = 1_000_000_000 (1e9)
+#   start_time        = 1_000_000_000 (T0)
+#   cliff_seconds     = 100
+#   duration_seconds  = 1_000
+#
+# So:
+#   - cliff hits at T0 + 100 (= 1_000_000_100)
+#   - fully vested at T0 + 1_000 (= 1_000_001_000)
+#   - at any t inside the linear window, vested = total * (t - T0) / 1_000
+
+[accounts]
+alice = {}
+bob   = {}
+carol = {}
+
+[cheats]
+chain_id = 31337
+
+# ─── Test 1: configure + read-back of all fields ─────────────────
+[[tests]]
+name = "configure_sets_all_fields_and_emits_event"
+
+[tests.cheats]
+now = 1_000_000_000          # T0
+
+[[tests.calls]]
+function = "configure"
+from     = "bob"
+args     = ["alice", "1000000000", "1000000000", "100", "1000"]
+expect.events = [
+  { name = "Configured", beneficiary = "alice" },
+]
+
+[[tests.calls]]
+function = "configured_flag"
+expect.return_value = "1"
+
+[[tests.calls]]
+function = "released_amount"
+expect.return_value = "0"
+
+# At T0, t < start + cliff (1_000_000_100), so vested = 0.
+[[tests.calls]]
+function = "vested_amount"
+expect.return_value = "0"
+
+[[tests.calls]]
+function = "releasable"
+expect.return_value = "0"
+
+# ─── Test 2: release before cliff reverts ────────────────────────
+[[tests]]
+name = "release_before_cliff_reverts"
+
+[tests.cheats]
+now = 1_000_000_050          # T0 + 50, before cliff
+
+[[tests.calls]]
+function = "configure"
+from     = "bob"
+args     = ["alice", "1000000000", "1000000000", "100", "1000"]
+
+[[tests.calls]]
+function = "release"
+from     = "carol"
+expect.revert = "vesting: nothing to release"
+
+[[tests.calls]]
+function = "released_amount"
+expect.return_value = "0"
+
+# ─── Test 3: release exactly at cliff yields cliff portion ───────
+[[tests]]
+name = "release_at_cliff_yields_proportional"
+
+[tests.setup]
+balances.__contract__ = "1_000_000_000"   # pre-fund the vesting wallet
+
+[tests.cheats]
+now = 1_000_000_100          # T0 + 100 (== start + cliff)
+
+[[tests.calls]]
+function = "configure"
+from     = "bob"
+args     = ["alice", "1000000000", "1000000000", "100", "1000"]
+
+# vested = total * cliff / duration = 1e9 * 100 / 1000 = 1e8
+[[tests.calls]]
+function = "vested_amount"
+expect.return_value = "100000000"
+
+[[tests.calls]]
+function = "releasable"
+expect.return_value = "100000000"
+
+[[tests.calls]]
+function = "release"
+from     = "carol"
+expect.return_value = "100000000"
+expect.events = [
+  { name = "Released", beneficiary = "alice" },
+]
+
+[[tests.calls]]
+function = "released_amount"
+expect.return_value = "100000000"
+
+[[tests.calls]]
+function = "releasable"
+expect.return_value = "0"        # drained at this timestamp
+
+# Funds actually moved from the contract to alice.
+[tests.expect]
+balances.__contract__ = "900000000"
+balances.alice        = "100000000"
+
+# ─── Test 4: mid-vesting linear release ──────────────────────────
+[[tests]]
+name = "mid_vesting_releases_half"
+
+[tests.setup]
+balances.__contract__ = "1_000_000_000"
+
+[tests.cheats]
+now = 1_000_000_500          # T0 + 500 (50% through duration)
+
+[[tests.calls]]
+function = "configure"
+from     = "bob"
+args     = ["alice", "1000000000", "1000000000", "100", "1000"]
+
+# vested = 1e9 * 500 / 1000 = 5e8
+[[tests.calls]]
+function = "vested_amount"
+expect.return_value = "500000000"
+
+[[tests.calls]]
+function = "release"
+from     = "carol"
+expect.return_value = "500000000"
+
+[[tests.calls]]
+function = "released_amount"
+expect.return_value = "500000000"
+
+[tests.expect]
+balances.__contract__ = "500000000"
+balances.alice        = "500000000"
+
+# ─── Test 5: after full duration releases everything ─────────────
+[[tests]]
+name = "after_duration_releases_all"
+
+[tests.setup]
+balances.__contract__ = "1_000_000_000"
+
+[tests.cheats]
+now = 1_000_002_000          # T0 + 2000 (well past duration)
+
+[[tests.calls]]
+function = "configure"
+from     = "bob"
+args     = ["alice", "1000000000", "1000000000", "100", "1000"]
+
+[[tests.calls]]
+function = "vested_amount"
+expect.return_value = "1000000000"
+
+[[tests.calls]]
+function = "release"
+from     = "carol"
+expect.return_value = "1000000000"
+
+[[tests.calls]]
+function = "released_amount"
+expect.return_value = "1000000000"
+
+# Second release call must revert — nothing left.
+[[tests.calls]]
+function = "release"
+from     = "carol"
+expect.revert = "vesting: nothing to release"
+
+# Contract fully drained to alice.
+[tests.expect]
+balances.__contract__ = "0"
+balances.alice        = "1000000000"
+
+# ─── Test 6: configure twice reverts ─────────────────────────────
+[[tests]]
+name = "second_configure_reverts"
+
+[tests.cheats]
+now = 1_000_000_000
+
+[[tests.calls]]
+function = "configure"
+from     = "bob"
+args     = ["alice", "1000000000", "1000000000", "100", "1000"]
+
+[[tests.calls]]
+function = "configure"
+from     = "bob"
+args     = ["alice", "999", "1000000000", "100", "1000"]
+expect.revert = "vesting: already configured"
+
+# Original total preserved.
+[[tests.calls]]
+function = "vested_amount"
+expect.return_value = "0"        # before cliff, but the schedule is unchanged
+
+# ─── Test 7: release before configure reverts ────────────────────
+[[tests]]
+name = "release_before_configure_reverts"
+
+[tests.cheats]
+now = 1_000_002_000
+
+[[tests.calls]]
+function = "release"
+from     = "carol"
+expect.revert = "vesting: not configured"
+
+# ─── Test 8: anyone-can-poke — non-beneficiary calls release ─────
+#
+# The `release()` fn is permissionless. The actual payout (event
+# payload + value transfer) is always to the configured beneficiary
+# regardless of `from`.
+[[tests]]
+name = "non_beneficiary_can_poke_release"
+
+[tests.setup]
+balances.__contract__ = "1_000_000_000"
+
+[tests.cheats]
+now = 1_000_002_000
+
+[[tests.calls]]
+function = "configure"
+from     = "bob"
+args     = ["alice", "1000000000", "1000000000", "100", "1000"]
+
+# carol (not alice, not bob) triggers the release.
+[[tests.calls]]
+function = "release"
+from     = "carol"
+expect.return_value = "1000000000"
+expect.events = [
+  { name = "Released", beneficiary = "alice" },    # NOT carol
+]
+
+# Funds go to alice, NOT to carol (the caller).
+[tests.expect]
+balances.__contract__ = "0"
+balances.alice        = "1000000000"
+balances.carol        = "0"
+
+# ─── Test 9: zero-duration (degenerate) vests at start ───────────
+[[tests]]
+name = "zero_duration_vests_at_start"
+
+[tests.setup]
+balances.__contract__ = "1_000_000_000"
+
+[tests.cheats]
+now = 1_000_000_000          # exactly start
+
+[[tests.calls]]
+function = "configure"
+from     = "bob"
+args     = ["alice", "1000000000", "1000000000", "0", "0"]
+
+[[tests.calls]]
+function = "vested_amount"
+expect.return_value = "1000000000"
+
+[[tests.calls]]
+function = "release"
+from     = "carol"
+expect.return_value = "1000000000"
+
+[tests.expect]
+balances.__contract__ = "0"
+balances.alice        = "1000000000"
+
+# ─── Test 10: partial release then later release tops up ─────────
+#
+# Because per-test cheats are global within a test, we exercise the
+# top-up behaviour as: release at cliff (yields 100M), then verify
+# released = 100M and releasable = 0 — the post-cliff balance is
+# proven in test 3. The "two-step" top-up across different times is
+# covered structurally by tests 3 (at-cliff partial) and 5 (after-
+# duration full) — same code paths.
+[[tests]]
+name = "released_and_releasable_invariants_hold"
+
+[tests.setup]
+balances.__contract__ = "1_000_000_000"
+
+[tests.cheats]
+now = 1_000_000_500          # mid-vesting
+
+[[tests.calls]]
+function = "configure"
+from     = "bob"
+args     = ["alice", "1000000000", "1000000000", "100", "1000"]
+
+[[tests.calls]]
+function = "release"
+from     = "carol"
+expect.return_value = "500000000"
+
+# Invariant: released_amount + releasable == vested_amount
+[[tests.calls]]
+function = "released_amount"
+expect.return_value = "500000000"
+
+[[tests.calls]]
+function = "releasable"
+expect.return_value = "0"
+
+[[tests.calls]]
+function = "vested_amount"
+expect.return_value = "500000000"
+
+[tests.expect]
+balances.__contract__ = "500000000"
+balances.alice        = "500000000"
+
+# ─── Test 11: zero-address beneficiary reverts ────────────────────
+#
+# Hardening: configure() must reject the zero address so tokens
+# can't be silently locked forever.
+[[tests]]
+name = "configure_zero_beneficiary_reverts"
+
+[tests.cheats]
+now = 1_000_000_000
+
+[[tests.calls]]
+function = "configure"
+from     = "bob"
+args     = ["__zero__", "1000000000", "1000000000", "100", "1000"]
+expect.revert = "vesting: beneficiary is zero address"
+
+# State stays uninitialised — subsequent release must hit the
+# NotConfigured path, not the zero-address sink.
+[[tests.calls]]
+function = "configured_flag"
+expect.return_value = "0"
+
+[[tests.calls]]
+function = "release"
+from     = "carol"
+expect.revert = "vesting: not configured"
+
+# ─── Test 12: second configure carries new revert prefix ──────────
+#
+# Hardening: existing one-shot guard is preserved, but the revert
+# message now follows the "vesting: ..." convention.
+[[tests]]
+name = "second_configure_reverts_with_prefix"
+
+[tests.cheats]
+now = 1_000_000_000
+
+[[tests.calls]]
+function = "configure"
+from     = "bob"
+args     = ["alice", "1000000000", "1000000000", "100", "1000"]
+
+[[tests.calls]]
+function = "configure"
+from     = "carol"
+args     = ["bob", "999", "1000000000", "100", "1000"]
+expect.revert = "vesting: already configured"
+
+# Even bob (the original configurer) can't reconfigure: one-shot
+# init IS the access control.
+[[tests.calls]]
+function = "configure"
+from     = "bob"
+args     = ["bob", "999", "1000000000", "100", "1000"]
+expect.revert = "vesting: already configured"
+
+# ─── Test 13: release without configure carries new prefix ────────
+[[tests]]
+name = "release_before_configure_reverts_with_prefix"
+
+[tests.cheats]
+now = 1_000_002_000
+
+[[tests.calls]]
+function = "release"
+from     = "carol"
+expect.revert = "vesting: not configured"
+
+# ─── Test 14: nothing-to-release carries new prefix ───────────────
+[[tests]]
+name = "nothing_to_release_carries_new_prefix"
+
+[tests.cheats]
+now = 1_000_000_050          # before cliff
+
+[[tests.calls]]
+function = "configure"
+from     = "bob"
+args     = ["alice", "1000000000", "1000000000", "100", "1000"]
+
+[[tests.calls]]
+function = "release"
+from     = "carol"
+expect.revert = "vesting: nothing to release"
+
+# ─── Test 15: double release after drain carries new prefix ───────
+#
+# Second release at the same timestamp drains nothing — covers the
+# "vested == released" branch with the hardened revert string.
+[[tests]]
+name = "double_release_drained_reverts_with_prefix"
+
+[tests.setup]
+balances.__contract__ = "1_000_000_000"
+
+[tests.cheats]
+now = 1_000_002_000          # past full duration
+
+[[tests.calls]]
+function = "configure"
+from     = "bob"
+args     = ["alice", "1000000000", "1000000000", "100", "1000"]
+
+[[tests.calls]]
+function = "release"
+from     = "carol"
+expect.return_value = "1000000000"
+
+[[tests.calls]]
+function = "release"
+from     = "carol"
+expect.revert = "vesting: nothing to release"
+
+# ─── Test 16: zero-address still rejected even with zero total ────
+#
+# Edge case: even a 0-amount, zero-beneficiary configure is
+# rejected. Confirms the zero-address guard fires BEFORE any other
+# downstream check.
+[[tests]]
+name = "zero_beneficiary_rejected_with_zero_total"
+
+[tests.cheats]
+now = 1_000_000_000
+
+[[tests.calls]]
+function = "configure"
+from     = "bob"
+args     = ["__zero__", "0", "1000000000", "0", "0"]
+expect.revert = "vesting: beneficiary is zero address"
+
+# ─── Test 17: zero-total schedule reverts (NEW hardening) ─────────
+#
+# A vesting wallet with `total = 0` is indistinguishable from an
+# unfunded contract — the misconfiguration would silently produce a
+# schedule that never pays anything. Reject up-front.
+[[tests]]
+name = "zero_total_rejected"
+
+[tests.cheats]
+now = 1_000_000_000
+
+[[tests.calls]]
+function = "configure"
+from     = "bob"
+args     = ["alice", "0", "1000000000", "100", "1000"]
+expect.revert = "vesting: total must be non-zero"
+
+# ─── Test 18: cliff > duration reverts (NEW hardening) ────────────
+#
+# Past `start + duration` the math collapses to `vested = total`
+# regardless of `cliff`, so a cliff longer than the duration is
+# a configuration error. Reject loudly.
+[[tests]]
+name = "cliff_exceeds_duration_rejected"
+
+[tests.cheats]
+now = 1_000_000_000
+
+[[tests.calls]]
+function = "configure"
+from     = "bob"
+args     = ["alice", "1000000000", "1000000000", "2000", "1000"]   # cliff=2000 > duration=1000
+expect.revert = "vesting: cliff exceeds duration"
+
+# ─── Test 19: fund() with zero value reverts (NEW hardening) ──────
+#
+# `fund()` is payable but a zero-value call is almost certainly a
+# misconfiguration in the caller's wallet; surface it loudly
+# instead of emitting a meaningless `Funded(_, 0)` event.
+[[tests]]
+name = "fund_zero_value_rejected"
+
+[tests.cheats]
+now = 1_000_000_000
+
+[[tests.calls]]
+function = "configure"
+from     = "bob"
+args     = ["alice", "1000000000", "1000000000", "100", "1000"]
+
+[[tests.calls]]
+function = "fund"
+from     = "bob"
+value    = "0"
+expect.revert = "vesting: fund requires non-zero value"
+
+# ─── Test 20: fund() emits Funded(from, amount) ──────────────────
+#
+# Validates the funding entry: bob calls `fund()` with 500 PYDE
+# attached, the contract reads `tx_value()` = 500 and emits
+# `Funded(bob, 500)` for off-chain accounting.
+#
+# (We don't assert balances here — the legacy in-memory test runner
+# doesn't apply the value-transfer side of `call.value` to the
+# accounts map. Real-chain integration tests confirm the funding
+# path end-to-end.)
+[[tests]]
+name = "fund_emits_funded_event_with_value"
+
+[tests.cheats]
+now = 1_000_000_000
+
+[[tests.calls]]
+function = "configure"
+from     = "bob"
+args     = ["alice", "1000000000", "1000000000", "100", "1000"]
+
+[[tests.calls]]
+function = "fund"
+from     = "bob"
+value    = "500"
+expect.events = [
+  { name = "Funded", from = "bob" },
+]
+
+# ─── Test 21: release reverts when contract is underfunded ────────
+#
+# `release()` updates state BEFORE attempting the value transfer.
+# When the contract's balance is less than the computed payout, the
+# host `transfer` returns non-zero and `release()` reverts with
+# `vesting: TransferFailed`. The whole frame rolls back atomically,
+# so `released` does not advance.
+[[tests]]
+name = "release_reverts_when_contract_underfunded"
+
+[tests.setup]
+balances.__contract__ = "100_000"   # less than the 100M cliff portion
+
+[tests.cheats]
+now = 1_000_000_100                 # exactly at cliff (cliff portion = 100M)
+
+[[tests.calls]]
+function = "configure"
+from     = "bob"
+args     = ["alice", "1000000000", "1000000000", "100", "1000"]
+
+[[tests.calls]]
+function = "release"
+from     = "carol"
+expect.revert = "vesting: TransferFailed"
+
+# State must NOT have advanced — the transfer revert rolled back the
+# storage write.
+[[tests.calls]]
+function = "released_amount"
+expect.return_value = "0"
+
+# Funds untouched.
+[tests.expect]
+balances.__contract__ = "100000"
+balances.alice        = "0"

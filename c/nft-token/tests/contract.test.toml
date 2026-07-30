@@ -1,0 +1,427 @@
+# `nft-token` — pts-n/1 behaviour suite for `otigen test`.
+#
+# Pins the PIP-0005 §12 surface: canonical `token:*` codes, the
+# zero-sentinel Transfer family, monotonic never-recycled ids,
+# authorization paths (owner / per-id approval / operator), atomic
+# approval clearing on transfer, role gating, and the recipient
+# guards including the token's own address via `__contract__`.
+#
+# transfer_call is exercised end-to-end in the token-vault receiver
+# suite (the toml runner cannot encode vec(uint8) arguments yet).
+# Indexed u64 topics (token_id) are not pinned in expect.events — the
+# matcher's non-address indexed encoding is unproven; ids are pinned
+# via return_value instead.
+#
+# Convention: every test calls `init` from `alice` — alice is
+# deployer, minter, and manager. token_id 0 is reserved; the first
+# mint is id 1.
+
+[accounts]
+alice = {}
+bob   = {}
+carol = {}
+dave  = {}
+
+[cheats]
+now      = 1_700_000_000
+chain_id = 31337
+
+# ─── init: metadata + roles ─────────────────────────────────────────
+
+[[tests]]
+name = "init_seats_roles_and_metadata"
+
+[[tests.calls]]
+function = "init"
+args     = ["Pyde Relics", "RELIC", "0"]
+from     = "alice"
+expect.events = [
+  { name = "RoleTransfer", holder = "alice" },
+  { name = "RoleTransfer", holder = "alice" },
+]
+
+[[tests.calls]]
+function = "total_supply"
+expect.return_value = "0"
+
+[[tests.calls]]
+function = "max_supply"
+expect.return_value = "0"
+
+[[tests.calls]]
+function = "standard"
+expect.no_revert = true
+
+[[tests.calls]]
+function = "name"
+expect.no_revert = true
+
+# ─── mint ───────────────────────────────────────────────────────────
+
+[[tests]]
+name = "mint_assigns_monotonic_ids_and_zero_sentinel"
+
+[[tests.calls]]
+function = "init"
+args     = ["Pyde Relics", "RELIC", "0"]
+from     = "alice"
+
+[[tests.calls]]
+function = "mint"
+from     = "alice"
+args     = ["bob", "ipfs://relic-1"]
+expect.return_value = "1"
+expect.events = [
+  { name = "Transfer", to = "bob" },
+]
+
+[[tests.calls]]
+function = "mint"
+from     = "alice"
+args     = ["carol", "ipfs://relic-2"]
+expect.return_value = "2"
+
+[[tests.calls]]
+function = "balance_of"
+args     = ["bob"]
+expect.return_value = "1"
+
+[[tests.calls]]
+function = "total_supply"
+expect.return_value = "2"
+
+[[tests.calls]]
+function = "token_uri"
+args     = ["1"]
+expect.no_revert = true
+
+[[tests]]
+name = "mint_gates"
+
+[[tests.calls]]
+function = "init"
+args     = ["Pyde Relics", "RELIC", "0"]
+from     = "alice"
+
+[[tests.calls]]
+function = "mint"
+from     = "bob"                  # not the minter
+args     = ["bob", "x"]
+expect.revert = "token:not_minter"
+
+[[tests.calls]]
+function = "mint"
+from     = "alice"
+args = [
+  "0x0000000000000000000000000000000000000000000000000000000000000000",
+  "x",
+]
+expect.revert = "token:invalid_recipient"
+
+[[tests.calls]]
+function = "mint"
+from     = "alice"
+args     = ["__contract__", "x"]
+expect.revert = "token:invalid_recipient"
+
+[[tests]]
+name = "mint_respects_cap"
+
+[[tests.calls]]
+function = "init"
+args     = ["Pyde Relics", "RELIC", "1"]
+from     = "alice"
+
+[[tests.calls]]
+function = "mint"
+from     = "alice"
+args     = ["bob", "one"]
+expect.no_revert = true
+
+[[tests.calls]]
+function = "mint"
+from     = "alice"
+args     = ["bob", "two"]
+expect.revert = "token:cap_exceeded"
+
+# ─── transfer_from: authorization paths ─────────────────────────────
+
+[[tests]]
+name = "owner_transfers_and_approval_clears"
+
+[[tests.calls]]
+function = "init"
+args     = ["Pyde Relics", "RELIC", "0"]
+from     = "alice"
+
+[[tests.calls]]
+function = "mint"
+from     = "alice"
+args     = ["bob", "relic"]
+
+# bob grants carol a per-id approval, then transfers to dave himself —
+# the stale approval must not survive the move.
+[[tests.calls]]
+function = "approve"
+from     = "bob"
+args     = ["carol", "1"]
+expect.events = [
+  { name = "Approval", owner = "bob", approved = "carol" },
+]
+
+[[tests.calls]]
+function = "transfer_from"
+from     = "bob"
+args     = ["bob", "dave", "1"]
+expect.events = [
+  { name = "Transfer", from = "bob", to = "dave" },
+]
+
+[[tests.calls]]
+function = "owner_of"
+args     = ["1"]
+expect.no_revert = true
+
+# carol's stale approval was cleared atomically with the transfer
+[[tests.calls]]
+function = "transfer_from"
+from     = "carol"
+args     = ["dave", "carol", "1"]
+expect.revert = "token:not_authorized"
+
+[[tests]]
+name = "approved_spender_can_transfer"
+
+[[tests.calls]]
+function = "init"
+args     = ["Pyde Relics", "RELIC", "0"]
+from     = "alice"
+
+[[tests.calls]]
+function = "mint"
+from     = "alice"
+args     = ["bob", "relic"]
+
+[[tests.calls]]
+function = "approve"
+from     = "bob"
+args     = ["carol", "1"]
+
+[[tests.calls]]
+function = "transfer_from"
+from     = "carol"
+args     = ["bob", "dave", "1"]
+expect.no_revert = true
+
+[[tests.calls]]
+function = "balance_of"
+args     = ["dave"]
+expect.return_value = "1"
+
+[[tests]]
+name = "operator_can_transfer_collection_wide"
+
+[[tests.calls]]
+function = "init"
+args     = ["Pyde Relics", "RELIC", "0"]
+from     = "alice"
+
+[[tests.calls]]
+function = "mint"
+from     = "alice"
+args     = ["bob", "relic"]
+
+[[tests.calls]]
+function = "set_approval_for_all"
+from     = "bob"
+args     = ["carol", "true"]
+expect.events = [
+  { name = "ApprovalForAll", owner = "bob", operator = "carol" },
+]
+
+[[tests.calls]]
+function = "is_approved_for_all"
+args     = ["bob", "carol"]
+expect.return_value = "1"
+
+[[tests.calls]]
+function = "transfer_from"
+from     = "carol"
+args     = ["bob", "dave", "1"]
+expect.no_revert = true
+
+[[tests]]
+name = "transfer_guards"
+
+[[tests.calls]]
+function = "init"
+args     = ["Pyde Relics", "RELIC", "0"]
+from     = "alice"
+
+[[tests.calls]]
+function = "mint"
+from     = "alice"
+args     = ["bob", "relic"]
+
+[[tests.calls]]
+function = "transfer_from"
+from     = "carol"                # no authorization at all
+args     = ["bob", "carol", "1"]
+expect.revert = "token:not_authorized"
+
+[[tests.calls]]
+function = "transfer_from"
+from     = "bob"
+args     = ["carol", "dave", "1"] # from ≠ actual owner
+expect.revert = "token:not_owner"
+
+[[tests.calls]]
+function = "transfer_from"
+from     = "bob"
+args     = ["bob", "dave", "99"]  # never minted
+expect.revert = "token:nonexistent"
+
+[[tests.calls]]
+function = "transfer_from"
+from     = "bob"
+args = [
+  "bob",
+  "0x0000000000000000000000000000000000000000000000000000000000000000",
+  "1",
+]
+expect.revert = "token:invalid_recipient"
+
+[[tests.calls]]
+function = "transfer_from"
+from     = "bob"
+args     = ["bob", "__contract__", "1"]
+expect.revert = "token:invalid_recipient"
+
+# ─── operator grant guards ──────────────────────────────────────────
+
+[[tests]]
+name = "operator_grant_rejects_zero_and_self"
+
+[[tests.calls]]
+function = "init"
+args     = ["Pyde Relics", "RELIC", "0"]
+from     = "alice"
+
+[[tests.calls]]
+function = "set_approval_for_all"
+from     = "bob"
+args = [
+  "0x0000000000000000000000000000000000000000000000000000000000000000",
+  "true",
+]
+expect.revert = "token:invalid_operator"
+
+[[tests.calls]]
+function = "set_approval_for_all"
+from     = "bob"
+args     = ["bob", "true"]
+expect.revert = "token:invalid_operator"
+
+# ─── burn: retired forever, ids never recycled ──────────────────────
+
+[[tests]]
+name = "burn_retires_the_id_forever"
+
+[[tests.calls]]
+function = "init"
+args     = ["Pyde Relics", "RELIC", "0"]
+from     = "alice"
+
+[[tests.calls]]
+function = "mint"
+from     = "alice"
+args     = ["bob", "relic-1"]
+expect.return_value = "1"
+
+[[tests.calls]]
+function = "burn"
+from     = "bob"
+args     = ["1"]
+expect.events = [
+  { name = "Transfer", from = "bob" },
+]
+
+[[tests.calls]]
+function = "total_supply"
+expect.return_value = "0"
+
+[[tests.calls]]
+function = "owner_of"
+args     = ["1"]
+expect.revert = "token:nonexistent"
+
+# The monotonic counter is untouched by burn — the next mint is id 2,
+# never a recycled 1.
+[[tests.calls]]
+function = "mint"
+from     = "alice"
+args     = ["carol", "relic-2"]
+expect.return_value = "2"
+
+[[tests]]
+name = "burn_requires_authorization"
+
+[[tests.calls]]
+function = "init"
+args     = ["Pyde Relics", "RELIC", "0"]
+from     = "alice"
+
+[[tests.calls]]
+function = "mint"
+from     = "alice"
+args     = ["bob", "relic"]
+
+[[tests.calls]]
+function = "burn"
+from     = "carol"
+args     = ["1"]
+expect.revert = "token:not_authorized"
+
+# ─── roles ──────────────────────────────────────────────────────────
+
+[[tests]]
+name = "role_rotation_and_renounce"
+
+[[tests.calls]]
+function = "init"
+args     = ["Pyde Relics", "RELIC", "0"]
+from     = "alice"
+
+[[tests.calls]]
+function = "set_minter"
+from     = "alice"
+args     = ["bob"]
+expect.events = [
+  { name = "RoleTransfer", holder = "bob", previous = "alice" },
+]
+
+[[tests.calls]]
+function = "mint"
+from     = "bob"
+args     = ["carol", "x"]
+expect.no_revert = true
+
+[[tests.calls]]
+function = "set_minter"
+from     = "bob"
+args     = ["carol"]
+expect.revert = "token:not_manager"
+
+[[tests.calls]]
+function = "set_manager"
+from     = "alice"
+args = [
+  "0x0000000000000000000000000000000000000000000000000000000000000000",
+]
+expect.no_revert = true
+
+[[tests.calls]]
+function = "set_minter"
+from     = "alice"
+args     = ["dave"]
+expect.revert = "token:not_manager"
