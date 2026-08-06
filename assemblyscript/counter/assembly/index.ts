@@ -1,21 +1,21 @@
 // `pyde-template` — minimal Pyde counter contract (increment + get),
 // scaffolded by `otigen init --lang as`.
 //
-// What it shows: host-fn imports from `@pyde-net/host` (run
-// `npm install` first), variable-length storage via `sload`/`sstore`
-// over a self-derived slot, `export function` entry points registered
-// in `otigen.toml`, and a manual little-endian u64 codec.
+// What it shows: host-fn imports from `@pyde-net/host/assembly/raw`
+// (run `npm install` first), typed scalar storage via
+// `sstore_scalar`/`sload_scalar` — the host derives the slot from the
+// field name, so the contract never hashes a slot itself — `export
+// function` entry points registered in `otigen.toml`, and a manual
+// little-endian u64 codec.
 //
 // Bigger surfaces (events, transfers, cross-contract calls) live in
 // the canonical examples at `pyde-net/otigen/examples/`.
 
 import {
-  sload,
-  sstore,
-  self_address,
-  hash_poseidon2,
+  sstore_scalar,
+  sload_scalar,
   pyde_return,
-} from "@pyde-net/host/assembly";
+} from "@pyde-net/host/assembly/raw";
 
 // AssemblyScript abort handler. Replaces AS's default `env.abort`
 // import (via asconfig.json's `use: ["abort=..."]`) so no non-`pyde::*`
@@ -31,41 +31,25 @@ function abort(
   unreachable();
 }
 
-// Storage field name for the counter. Its slot is derived at runtime
-// as `Poseidon2(self_address || FIELD_COUNTER)` — field names live
-// inside the slot hash and never appear on-chain literally.
+// Storage field name for the counter. The host derives this contract's
+// typed slot from the field name — the contract never computes a slot
+// hash itself. Field names live inside the derivation and never appear
+// on-chain literally. This must match the `[state]` field name in
+// `otigen.toml`, so a test that reads `storage.counter` sees this write.
 const FIELD_COUNTER: StaticArray<u8> = [0x63, 0x6f, 0x75, 0x6e, 0x74, 0x65, 0x72]; // "counter"
 
-// u64 storage codec. Pyde storage is variable-length: a u64 is stored
-// as exactly 8 bytes (no 32-byte padding). The slot key is
-// `Poseidon2(self_address || field [|| key])` — pass a null key for
-// scalar slots. AS has no built-in LE u64 encoder, so we hand-roll it.
-
-function deriveSlot(field: StaticArray<u8>, key: StaticArray<u8> | null): StaticArray<u8> {
-  const fieldLen = field.length;
-  const keyLen = key != null ? key.length : 0;
-  const total = 32 + fieldLen + keyLen;
-
-  const preimage = new StaticArray<u8>(total);
-  self_address(changetype<usize>(preimage));
-  for (let i = 0; i < fieldLen; i++) {
-    preimage[32 + i] = field[i];
-  }
-  if (key != null) {
-    for (let i = 0; i < keyLen; i++) {
-      preimage[32 + fieldLen + i] = key[i];
-    }
-  }
-
-  const out = new StaticArray<u8>(32);
-  hash_poseidon2(changetype<usize>(preimage), total, changetype<usize>(out));
-  return out;
-}
+// u64 storage codec. Pyde typed storage is variable-length: a u64 is
+// stored as exactly 8 bytes (no 32-byte padding). AS has no built-in LE
+// u64 encoder, so we hand-roll it.
 
 function readCounter(): u64 {
-  const slot = deriveSlot(FIELD_COUNTER, null);
   const buf = new StaticArray<u8>(8);
-  const actual = sload(changetype<usize>(slot), changetype<usize>(buf), 8);
+  const actual = sload_scalar(
+    changetype<usize>(FIELD_COUNTER),
+    FIELD_COUNTER.length,
+    changetype<usize>(buf),
+    8,
+  );
   if (actual <= 0) {
     return 0;
   }
@@ -79,14 +63,18 @@ function readCounter(): u64 {
 }
 
 function writeCounter(value: u64): void {
-  const slot = deriveSlot(FIELD_COUNTER, null);
   const buf = new StaticArray<u8>(8);
   // u64 LE encode — buf[0] is the lowest 8 bits.
   for (let i = 0; i < 8; i++) {
     buf[i] = u8(value & 0xff);
     value = value >> 8;
   }
-  sstore(changetype<usize>(slot), changetype<usize>(buf), 8);
+  sstore_scalar(
+    changetype<usize>(FIELD_COUNTER),
+    FIELD_COUNTER.length,
+    changetype<usize>(buf),
+    8,
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────
