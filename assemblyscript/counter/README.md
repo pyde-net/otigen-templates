@@ -68,10 +68,12 @@ canonical derivation includes the contract's address:
 slot = Poseidon2(contract_address || field_name [|| key_bytes])
 ```
 
-**Storage is variable-length**. The contract derives the slot itself
-via a `deriveSlot` helper (see `assembly/index.ts`), then reads or
-writes the exact byte width it needs through `sload` / `sstore` /
-`sdelete` (imported from `@pyde-net/host`).
+**Storage is variable-length**. Declare fields in `otigen.toml`'s
+`[state]` and let the host derive their typed slots — the contract
+never hashes a slot itself. Read and write the exact byte width you
+need through `sload_scalar` / `sstore_scalar` (and the
+`sload_map1..3` / `sstore_map1..3` family for keyed maps), imported
+from `@pyde-net/host/assembly/raw`.
 
 Inside a slot, byte conventions:
 
@@ -88,14 +90,14 @@ package with a short comment + gas cost. Import the symbols you need
 directly:
 
 ```ts
-import { sload, sstore, caller, emit_event } from "@pyde-net/host/assembly";
+import { sstore_scalar, sload_scalar } from "@pyde-net/host/assembly/raw";
 ```
 
 Categories:
 
 | Category | Section | What you use it for |
 |---|---|---|
-| Storage | §7.1 | `sload` / `sstore` / `sdelete` (call `deriveSlot(field, key)` first) |
+| Storage | §7.1 | `sstore_scalar` / `sload_scalar` (+ `*_map1..3`); the host derives the typed slot from the field name |
 | Balance | §7.2 | `balance` / `transfer` (native PYDE) |
 | Context | §7.3 | `caller` / `origin` / `self_address` / `wave_timestamp` / `chain_id` |
 | Tx context | §7.4 | `tx_hash` / `tx_value` / `calldata_size` / `calldata_copy` |
