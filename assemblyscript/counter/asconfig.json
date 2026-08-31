@@ -13,6 +13,7 @@
   },
   "options": {
     "bindings": "raw",
-    "use": ["abort=assembly/index/abort"]
+    "use": ["abort=assembly/index/abort"],
+    "transform": ["@pyde-net/host/transform"]
   }
 }
