@@ -18,7 +18,8 @@ pyde-template/
 ├── Makefile               # build / test / deploy / inspect / verify
 ├── otigen.toml            # contract metadata + state schema + network
 ├── assembly/
-│   └── index.ts           # YOUR CONTRACT CODE (start here)
+│   ├── contract.ts        # YOUR CONTRACT CODE (start here)
+│   └── index.ts           # asc entry: re-exports the generated shims
 └── tests/
     └── contract.test.toml # behaviour tests (Foundry-shape TOML)
 ```
@@ -69,11 +70,25 @@ slot = Poseidon2(contract_address || field_name [|| key_bytes])
 ```
 
 **Storage is variable-length**. Declare fields in `otigen.toml`'s
-`[state]` and let the host derive their typed slots — the contract
-never hashes a slot itself. Read and write the exact byte width you
-need through `sload_scalar` / `sstore_scalar` (and the
-`sload_map1..3` / `sstore_map1..3` family for keyed maps), imported
-from `@pyde-net/host/assembly/raw`.
+`[state]` and `otigen build` generates a typed accessor into
+`assembly/pyde.storage.generated.ts`:
+
+```ts
+import { storage } from "./pyde.storage.generated";
+
+storage.counter.read();          // u64
+storage.counter.write(next);
+storage.counter.delete();
+storage.balances.read(who);      // map: keys first, in declaration order
+```
+
+The slot is derived host-side from the field name, so the contract
+never hashes one, and the width is checked against the declared type
+rather than trusted. Underneath the accessor calls `sload_scalar` /
+`sstore_scalar` (and the `*_map1..3` family for keyed maps) from
+`@pyde-net/host/assembly/raw` — you can call those directly when you
+need a shape the accessor does not cover, and both land in the same
+keyspace.
 
 Inside a slot, byte conventions:
 
