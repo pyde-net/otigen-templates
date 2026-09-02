@@ -1,6 +1,9 @@
 {
   "schema": 2,
-  "sentinel": { "kebab": "pyde-template", "snake": "pyde_template" },
+  "sentinel": {
+    "kebab": "pyde-template",
+    "snake": "pyde_template"
+  },
   "sdk": {
     "go": "v0.1.0-alpha.12",
     "rust": "0.1.0-alpha.9",
@@ -14,7 +17,12 @@
       "description": "Minimal viable contract — a single u64 counter (otigen init equivalent).",
       "kind": "source",
       "standard": null,
-      "langs": ["rust", "go", "assemblyscript", "c"]
+      "langs": [
+        "rust",
+        "go",
+        "assemblyscript",
+        "c"
+      ]
     },
     {
       "id": "token",
@@ -23,7 +31,12 @@
       "description": "Fungible token (PTS-F, pts-f/1) — config-only: edit otigen.toml, otigen build generates the rest.",
       "kind": "standard",
       "standard": "pts-f/1",
-      "langs": ["rust", "go", "assemblyscript", "c"]
+      "langs": [
+        "rust",
+        "go",
+        "assemblyscript",
+        "c"
+      ]
     },
     {
       "id": "nft",
@@ -32,7 +45,12 @@
       "description": "NFT collection (PTS-N, pts-n/1) — config-only: edit otigen.toml, otigen build generates the rest.",
       "kind": "standard",
       "standard": "pts-n/1",
-      "langs": ["rust", "go", "assemblyscript", "c"]
+      "langs": [
+        "rust",
+        "go",
+        "assemblyscript",
+        "c"
+      ]
     },
     {
       "id": "fungible-token",
@@ -41,7 +59,11 @@
       "description": "PTS-F reference token (pts-f/1): expiring allowances, settle-then-notify transfer_call, role-gated supply.",
       "kind": "source",
       "standard": null,
-      "langs": ["rust", "go", "c"]
+      "langs": [
+        "rust",
+        "go",
+        "c"
+      ]
     },
     {
       "id": "nft-token",
@@ -50,7 +72,11 @@
       "description": "PTS-N reference NFT (pts-n/1): per-id owners, settle-then-notify transfer_call, on-chain token URIs.",
       "kind": "source",
       "standard": null,
-      "langs": ["rust", "go", "c"]
+      "langs": [
+        "rust",
+        "go",
+        "c"
+      ]
     },
     {
       "id": "simple-multisig",
@@ -59,7 +85,11 @@
       "description": "3-signer FALCON-512 multisig. Demonstrates falcon_verify + signer-ID lookup + replay protection.",
       "kind": "source",
       "standard": null,
-      "langs": ["rust", "go", "c"]
+      "langs": [
+        "rust",
+        "go",
+        "c"
+      ]
     },
     {
       "id": "upgradeable-proxy",
@@ -68,7 +98,11 @@
       "description": "Upgradeable proxy via delegate_call. Admin-controlled implementation slot; state preserved across upgrades.",
       "kind": "source",
       "standard": null,
-      "langs": ["rust", "go", "c"]
+      "langs": [
+        "rust",
+        "go",
+        "c"
+      ]
     },
     {
       "id": "merkle-claim-airdrop",
@@ -77,7 +111,11 @@
       "description": "Merkle-tree airdrop claim. Off-chain commitment + on-chain inclusion verification via Blake3.",
       "kind": "source",
       "standard": null,
-      "langs": ["rust", "go", "c"]
+      "langs": [
+        "rust",
+        "go",
+        "c"
+      ]
     },
     {
       "id": "vesting",
@@ -86,7 +124,12 @@
       "description": "Linear vesting with cliff. Time-locked allocation using wave_timestamp.",
       "kind": "source",
       "standard": null,
-      "langs": ["rust", "go", "c"]
+      "langs": [
+        "rust",
+        "go",
+        "assemblyscript",
+        "c"
+      ]
     },
     {
       "id": "dao-governance",
@@ -95,7 +138,11 @@
       "description": "Composed example. FALCON-signed votes + time phases + Blake3-committed execution.",
       "kind": "source",
       "standard": null,
-      "langs": ["rust", "go", "c"]
+      "langs": [
+        "rust",
+        "go",
+        "c"
+      ]
     },
     {
       "id": "factory",
@@ -104,7 +151,11 @@
       "description": "Factory pattern: a contract that deploys child contracts of any template via pyde::instantiate.",
       "kind": "source",
       "standard": null,
-      "langs": ["rust", "go", "c"]
+      "langs": [
+        "rust",
+        "go",
+        "c"
+      ]
     }
   ]
 }
