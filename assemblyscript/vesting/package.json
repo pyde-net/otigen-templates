@@ -7,7 +7,7 @@
     "build": "asc assembly/index.ts --config asconfig.json --target release"
   },
   "dependencies": {
-    "@pyde-net/host": "0.1.0-alpha.15"
+    "@pyde-net/host": "0.1.0-alpha.16"
   },
   "devDependencies": {
     "assemblyscript": "^0.28.0"
