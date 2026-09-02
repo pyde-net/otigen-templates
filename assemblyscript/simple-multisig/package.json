@@ -1,0 +1,15 @@
+{
+  "name": "pyde-template",
+  "version": "0.1.0",
+  "description": "3-signer FALCON-512 multisig: in-contract post-quantum signature verification.",
+  "private": true,
+  "scripts": {
+    "build": "asc assembly/index.ts --config asconfig.json --target release"
+  },
+  "dependencies": {
+    "@pyde-net/host": "0.1.0-alpha.15"
+  },
+  "devDependencies": {
+    "assemblyscript": "^0.28.0"
+  }
+}
