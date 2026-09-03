@@ -1,0 +1,15 @@
+{
+  "name": "pyde-template",
+  "version": "0.1.0",
+  "description": "PTS fungible token (pts-f/1) with allowances, expiries, and a supply cap.",
+  "private": true,
+  "scripts": {
+    "build": "asc assembly/index.ts --config asconfig.json --target release"
+  },
+  "dependencies": {
+    "@pyde-net/host": "0.1.0-alpha.16"
+  },
+  "devDependencies": {
+    "assemblyscript": "^0.28.0"
+  }
+}
