@@ -62,7 +62,8 @@
       "langs": [
         "rust",
         "go",
-        "c"
+        "c",
+        "assemblyscript"
       ]
     },
     {
