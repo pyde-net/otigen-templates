@@ -1,0 +1,124 @@
+# `simple-multisig` — 3-signer FALCON-512 multisig contract manifest.
+# See: https://book.pyde.network/companion/OTIGEN_BINARY_SPEC
+
+[contract]
+name        = "pyde-template"
+version     = "0.1.0"
+description = "3-signer FALCON-512 multisig — canonical Pyde example of in-contract post-quantum signature verification."
+type        = "contract"
+
+[contract.lang]
+language = "as"
+output   = "build/contract.wasm"
+
+[contract.lang.toolchain]
+asc_version = "0.28.0"
+
+[deploy]
+gas_limit = 10_000_000
+gas_price = "auto"
+
+[network.default]
+name = "devnet"
+
+[network.devnet]
+rpc_url  = "http://127.0.0.1:9933"
+chain_id = 31337
+
+# State schema. `signers` is a single-key map keyed by slot index
+# (uint8); `used` is a single-key map keyed by the 32-byte
+# action_digest sentinel. Both lower to typed-storage `sstore_map1`
+# / `sload_map1` via the macro substrate.
+[state]
+schema = [
+    { name = "threshold", type = "uint8" },
+    { name = "signers",   type = "map", keys = ["uint8"],   value = "bytes32" },
+    { name = "used",      type = "map", keys = ["bytes32"], value = "bool" },
+]
+
+# ── Functions ──────────────────────────────────────────────────────
+
+# Constructor — records the threshold + 3 signer-ID hashes
+# (Poseidon2 of each FALCON-512 pubkey). Reverts if any two of the
+# three signer hashes match (DuplicateSignerInInit).
+[functions.init]
+attributes = ["constructor"]
+inputs     = ["uint8", "bytes32", "bytes32", "bytes32"]
+outputs    = []
+
+# Main entry. Up to 3 (pubkey, signature) pairs. Unused slots pass
+# empty `bytes` (len 0). The `#[pyde::entry]` macro decodes the
+# borsh-encoded calldata blob into typed Rust arguments — the
+# WASM-visible export remains `() -> ()` per HOST_FN_ABI §3.5.2.
+#
+# Sigs MUST be over the on-chain-computed `action_digest`, which
+# binds (self_address, chain_id, target, amount, nonce). The
+# `action_digest` view function returns the canonical digest off-
+# chain wallets need to sign.
+[functions.execute]
+attributes = ["entry"]
+inputs = [
+    "address",   # target
+    "uint128",   # amount
+    "uint128",   # nonce — disambiguates otherwise-identical intents
+    "bytes",     # pk1
+    "bytes",     # sig1
+    "bytes",     # pk2
+    "bytes",     # sig2
+    "bytes",     # pk3
+    "bytes",     # sig3
+]
+outputs = []
+
+[functions.get_threshold]
+attributes = ["entry", "view"]
+inputs     = []
+outputs    = ["uint8"]
+
+[functions.is_used]
+attributes = ["entry", "view"]
+inputs     = ["bytes32"]
+outputs    = ["bool"]
+
+# Off-chain view: returns the canonical Poseidon2 digest the contract
+# would recompute for a given (target, amount, nonce). Off-chain
+# wallets call this before collecting signatures so every signer signs
+# the exact same bytes the chain will check.
+[functions.action_digest]
+attributes = ["entry", "view"]
+inputs     = ["address", "uint128", "uint128"]
+outputs    = ["bytes32"]
+
+# ── Events ─────────────────────────────────────────────────────────
+#
+# `signature` is hashed via Blake3 to produce topic-0. The macro
+# layer derives this hash automatically; no constant in source.
+
+[events.Executed]
+signature = "Executed(address,uint128,bytes32)"
+fields = [
+    { name = "target",        type = "address", indexed = true },
+    { name = "amount",        type = "uint128" },
+    { name = "action_digest", type = "bytes32", indexed = true },
+]
+
+# ─────────────────────────────────────────────────────────────────────
+# Optional: [metadata] — public info surfaced by explorers, wallets, and
+# `otigen inspect`. Every field is optional; uncomment what you want.
+# The values below show each field's accepted shape and validate as-is.
+#
+# [metadata]
+# name              = "my-contract"                       # display name, lowercase [a-z0-9-] (may differ from contract.name)
+# description       = "One-line summary of what this contract does."   # < 1000 chars
+# website           = "https://example.com"               # https:// URL
+# logo_url          = "https://example.com/logo.png"      # https:// URL
+# repository_url    = "https://github.com/pyde-net/example"  # https:// URL
+# documentation_url = "https://docs.example.com"          # https:// URL
+# license           = "MIT"                               # SPDX id: MIT, Apache-2.0, GPL-3.0-only, BUSL-1.1, … (SPDX_IDENTIFIERS)
+# authors           = ["Ada Lovelace <ada@example.com>"]  # "Name <email>" strings, ≤ 32 entries
+# tags              = ["defi", "example"]                 # slugs [a-z0-9-], ≤ 32 entries
+# declared_category = "app"                               # token|nft|dao|dex|lending|vault|oracle|bridge|multisig|staking|proxy|escrow|launchpad|registry|marketplace|payment|insurance|game|cred|rwa|app
+# twitter           = "https://x.com/pydenet"             # full URL, or bare handle "pydenet" (no @, [A-Za-z0-9_] ≤ 15)
+# github            = "https://github.com/pyde-net"        # full URL, or bare org/user handle "pyde-net"
+# telegram          = "https://t.me/pydenet"               # full URL, or bare channel handle "pydenet"
+# discord           = "https://discord.gg/pydenet"         # full URL, or bare server handle
