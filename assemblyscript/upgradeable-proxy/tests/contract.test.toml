@@ -1,0 +1,335 @@
+# upgradeable-proxy behaviour tests. Exercises the proxy's OWN
+# surface (init, upgrade_to admin gate, Upgraded event,
+# get_value initial state). The full forward(fn, calldata) →
+# delegate-call into logic-v1 / logic-v2 path lives in the
+# live-devnet e2e instead — delegate_call cross-target is a
+# chain-side concern, not something the wasmtime test sandbox is
+# the right place to exercise.
+#
+# Address-typed state is verified through the Initialized +
+# Upgraded events (event matchers resolve named accounts); the
+# storage assertion form only auto-resolves names in slot keys,
+# not in values.
+
+[accounts]
+alice = {}            # initial admin (init caller)
+bob = {}              # non-admin — tries the upgrade attack
+logic_v1 = {}         # placeholder address for the initial logic pointer
+logic_v2 = {}         # placeholder for the post-upgrade logic pointer
+
+[cheats]
+now      = 1_700_000_000
+chain_id = 31337
+
+# ── Test 1: init records admin + initial logic pointer ───────────
+#
+# Initialized event carries both indexed fields — its presence with
+# the right addresses proves init wrote the slots correctly.
+[[tests]]
+name = "init_records_admin_and_logic"
+
+[[tests.calls]]
+function = "init"
+from     = "alice"
+args     = ["logic_v1"]
+expect.events = [
+  { name = "Initialized", admin = "alice", initial_logic = "logic_v1" },
+]
+
+# ── Test 2: admin can swap the logic pointer + Upgraded fires ────
+[[tests]]
+name = "admin_upgrade_succeeds"
+
+[[tests.calls]]
+function = "init"
+from     = "alice"
+args     = ["logic_v1"]
+
+[[tests.calls]]
+function = "upgrade_to"
+from     = "alice"
+args     = ["logic_v2"]
+expect.events = [
+  { name = "Upgraded", old_logic = "logic_v1", new_logic = "logic_v2" },
+]
+
+# ── Test 3: non-admin upgrade reverts ─────────────────────────────
+[[tests]]
+name = "non_admin_upgrade_reverts"
+
+[[tests.calls]]
+function = "init"
+from     = "alice"
+args     = ["logic_v1"]
+
+[[tests.calls]]
+function = "upgrade_to"
+from     = "bob"
+args     = ["logic_v2"]
+expect.revert = "proxy: caller is not admin"
+
+# ── Test 4: get_value starts at zero ──────────────────────────────
+#
+# The proxy's value slot is the storage the logic contract writes
+# to via delegate-call. With no forward() calls yet, it stays at
+# zero. Also confirms get_value is open to non-admin callers.
+[[tests]]
+name = "get_value_initial_zero"
+
+[[tests.calls]]
+function = "init"
+from     = "alice"
+args     = ["logic_v1"]
+
+[[tests.calls]]
+function = "get_value"
+from     = "bob"
+expect.return_value = "0"
+
+# ── Test 5: re-upgrade works (admin can swap multiple times) ──────
+[[tests]]
+name = "multiple_upgrades_succeed"
+
+[[tests.calls]]
+function = "init"
+from     = "alice"
+args     = ["logic_v1"]
+
+[[tests.calls]]
+function = "upgrade_to"
+from     = "alice"
+args     = ["logic_v2"]
+expect.events = [
+  { name = "Upgraded", old_logic = "logic_v1", new_logic = "logic_v2" },
+]
+
+[[tests.calls]]
+function = "upgrade_to"
+from     = "alice"
+args     = ["logic_v1"]
+expect.events = [
+  { name = "Upgraded", old_logic = "logic_v2", new_logic = "logic_v1" },
+]
+
+# ── Test 6: init with zero-address logic reverts ──────────────────
+#
+# A zero `initial_logic` would leave every future `forward()` call
+# delegate-calling into the zero address — every dispatch would fail
+# forever. Catch it at init time.
+[[tests]]
+name = "init_with_zero_logic_reverts"
+
+[[tests.calls]]
+function = "init"
+from     = "alice"
+args     = ["__zero__"]
+expect.revert = "proxy: init with zero address"
+
+# ── Test 7: init from zero-address caller reverts ─────────────────
+#
+# `init` records the caller as admin. A zero admin makes the proxy
+# permanently un-upgradeable (no one will ever pass the
+# `caller == admin` check in upgrade_to). The default test caller IS
+# the zero address — omitting `from` exercises that path.
+[[tests]]
+name = "init_with_zero_admin_reverts"
+
+[[tests.calls]]
+function = "init"
+args     = ["logic_v1"]
+expect.revert = "proxy: init with zero address"
+
+# ── Test 8: init with both zero reverts ───────────────────────────
+#
+# Belt-and-braces — covers the case where neither field is set, just
+# to prove the guard fires regardless of which input is zero.
+[[tests]]
+name = "init_with_both_zero_reverts"
+
+[[tests.calls]]
+function = "init"
+args     = ["__zero__"]
+expect.revert = "proxy: init with zero address"
+
+# ── Test 9: admin upgrade to zero-address reverts ─────────────────
+#
+# Same brick-the-proxy hazard as zero-init, but at upgrade time. Even
+# a legitimate admin shouldn't be able to point `logic` at zero.
+[[tests]]
+name = "upgrade_to_zero_logic_reverts"
+
+[[tests.calls]]
+function = "init"
+from     = "alice"
+args     = ["logic_v1"]
+
+[[tests.calls]]
+function = "upgrade_to"
+from     = "alice"
+args     = ["__zero__"]
+expect.revert = "proxy: upgrade to zero address"
+
+# ── Test 10: non-admin upgrade to zero hits admin check first ─────
+#
+# Access-control boundary: input validation MUST NOT leak past the
+# admin gate. A non-admin caller should still see the access-control
+# revert even when the would-be input is also invalid — proves the
+# admin check runs before the zero-address check.
+[[tests]]
+name = "non_admin_upgrade_to_zero_admin_check_first"
+
+[[tests.calls]]
+function = "init"
+from     = "alice"
+args     = ["logic_v1"]
+
+[[tests.calls]]
+function = "upgrade_to"
+from     = "bob"
+args     = ["__zero__"]
+expect.revert = "proxy: caller is not admin"
+
+# ── Test 11: re-init reverts (NEW hardening) ──────────────────────
+#
+# `init` is `["constructor"]` in the manifest so the chain rejects
+# post-deploy calls. The in-source `proxy_admin != ZERO` guard is
+# defence in depth + catches accidental re-runs in the test runner.
+[[tests]]
+name = "second_init_reverts"
+
+[[tests.calls]]
+function = "init"
+from     = "alice"
+args     = ["logic_v1"]
+
+[[tests.calls]]
+function = "init"
+from     = "bob"
+args     = ["logic_v2"]
+expect.revert = "proxy: already initialized"
+
+# State must NOT have advanced — alice is still admin, logic_v1 still
+# pointed at. Confirms the in-source guard runs BEFORE any writes.
+[[tests.calls]]
+function = "get_admin"
+expect.return_address = "alice"
+
+[[tests.calls]]
+function = "get_logic"
+expect.return_address = "logic_v1"
+
+# ── Test 12: admin transfer rotates the role (NEW hardening) ──────
+[[tests]]
+name = "admin_transfer_succeeds"
+
+[[tests.calls]]
+function = "init"
+from     = "alice"
+args     = ["logic_v1"]
+
+[[tests.calls]]
+function = "transfer_admin"
+from     = "alice"
+args     = ["bob"]
+expect.events = [
+  { name = "AdminTransferred", old_admin = "alice", new_admin = "bob" },
+]
+
+# Bob can now upgrade; alice cannot.
+[[tests.calls]]
+function = "upgrade_to"
+from     = "alice"
+args     = ["logic_v2"]
+expect.revert = "proxy: caller is not admin"
+
+[[tests.calls]]
+function = "upgrade_to"
+from     = "bob"
+args     = ["logic_v2"]
+
+# ── Test 13: non-admin transfer reverts (NEW hardening) ───────────
+[[tests]]
+name = "non_admin_transfer_reverts"
+
+[[tests.calls]]
+function = "init"
+from     = "alice"
+args     = ["logic_v1"]
+
+[[tests.calls]]
+function = "transfer_admin"
+from     = "bob"
+args     = ["bob"]
+expect.revert = "proxy: caller is not admin"
+
+# Admin still alice.
+[[tests.calls]]
+function = "get_admin"
+expect.return_address = "alice"
+
+# ── Test 14: transfer_admin to zero rejected (NEW hardening) ──────
+#
+# Use `renounce_admin` for the irrevocable zero-address path so the
+# intent is loud rather than disguised as a transfer.
+[[tests]]
+name = "transfer_admin_to_zero_rejected"
+
+[[tests.calls]]
+function = "init"
+from     = "alice"
+args     = ["logic_v1"]
+
+[[tests.calls]]
+function = "transfer_admin"
+from     = "alice"
+args     = ["__zero__"]
+expect.revert = "proxy: transfer to zero address; use renounce_admin"
+
+# ── Test 15: renounce_admin locks the logic forever (NEW hardening)
+[[tests]]
+name = "renounce_admin_locks_logic"
+
+[[tests.calls]]
+function = "init"
+from     = "alice"
+args     = ["logic_v1"]
+
+[[tests.calls]]
+function = "renounce_admin"
+from     = "alice"
+expect.events = [
+  { name = "AdminTransferred", old_admin = "alice" },
+]
+
+# Admin is now zero.
+[[tests.calls]]
+function = "get_admin"
+expect.return_address = "__zero__"
+
+# Nobody (not even alice) can upgrade anymore — every upgrade_to
+# fails the admin check because admin = ZERO_ADDRESS and the caller
+# (even alice) is non-zero.
+[[tests.calls]]
+function = "upgrade_to"
+from     = "alice"
+args     = ["logic_v2"]
+expect.revert = "proxy: caller is not admin"
+
+# ── Test 16: non-admin renounce reverts (NEW hardening) ───────────
+[[tests]]
+name = "non_admin_renounce_reverts"
+
+[[tests.calls]]
+function = "init"
+from     = "alice"
+args     = ["logic_v1"]
+
+[[tests.calls]]
+function = "renounce_admin"
+from     = "bob"
+expect.revert = "proxy: caller is not admin"
+
+# Admin still alice.
+[[tests.calls]]
+function = "get_admin"
+expect.return_address = "alice"
