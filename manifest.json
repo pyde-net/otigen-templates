@@ -115,6 +115,7 @@
       "langs": [
         "rust",
         "go",
+        "assemblyscript",
         "c"
       ]
     },
@@ -128,6 +129,7 @@
       "langs": [
         "rust",
         "go",
+        "assemblyscript",
         "c"
       ]
     },
