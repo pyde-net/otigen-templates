@@ -110,7 +110,6 @@ function computeActionDigest(target: Address, amount: u128, nonce: u128): Bytes3
 /// `(alice, alice, bob)` would silently degrade a threshold of 2 into a
 /// 1-of-2, because alice alone fills two slots. That is not a multisig.
 @entry
-@mutating
 export function init(
   threshold: u8,
   signer0: Bytes32,
@@ -143,7 +142,6 @@ export function init(
 /// sign exactly what the contract will recompute. Query `action_digest`
 /// first, or derive it off-chain from the canonical encoding above.
 @entry
-@mutating
 export function execute(
   target: Address,
   amount: u128,

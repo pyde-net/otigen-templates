@@ -20,8 +20,12 @@
 
 import { storage } from "./pyde.storage.generated";
 
-// The `@view` / `@mutating` / `@payable` markers state what an entry
-// DOES, and are checked against `[functions.*]` by the
+// `@entry` makes a function chain-facing. On its own it is MUTATING,
+// exactly like Rust's `#[pyde::entry]` — mutating is the default, so
+// there is nothing extra to write for the common case.
+//
+// Add `@view` (or `@payable`) to state that an entry does something
+// narrower. Those markers are checked against `[functions.*]` by the
 // `@pyde-net/host/transform` plugin wired in asconfig.json: mark a
 // function `@view` while the manifest says it mutates, or the reverse,
 // and the build fails naming both sides. They add nothing to the wasm —
@@ -29,7 +33,6 @@ import { storage } from "./pyde.storage.generated";
 
 // increment() -> uint64 — advance the counter, return the new value.
 @entry
-@mutating
 export function increment(): u64 {
   const next = storage.counter.read() + 1;
   storage.counter.write(next);
