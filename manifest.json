@@ -5,9 +5,9 @@
     "snake": "pyde_template"
   },
   "sdk": {
-    "go": "v0.1.0-alpha.12",
-    "rust": "0.1.0-alpha.9",
-    "assemblyscript": "0.1.0-alpha.9"
+    "go": "v0.1.0-alpha.15",
+    "rust": "0.1.0-alpha.14",
+    "assemblyscript": "0.1.0-alpha.17"
   },
   "templates": [
     {
