@@ -35,8 +35,8 @@ otigen call factory-rust bump_named "eth/usdc"    --network devnet   # by string
 otigen call factory-rust bump_at    <child-address> --network devnet # by raw address
 ```
 
-`create` returns the child's address (and emits an `Instantiated`
-event). `child_of(key)` / `child_of_name(name)` look a child up;
+`create` returns the child's address. `child_of(key)` /
+`child_of_name(name)` look a child up;
 `next_key()` / `created()` report the factory's state.
 
 ## Why it works

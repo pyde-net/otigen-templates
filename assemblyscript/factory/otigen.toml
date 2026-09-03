@@ -1,0 +1,110 @@
+# A factory: mint and drive child contracts via `pyde::instantiate`.
+#
+# The template is ANY contract you have already deployed — there is no
+# dedicated "template" contract to ship. Deploy a contract (the built-in
+# `counter` template is a perfect fit — it has an `increment() -> u64`
+# and no required constructor), copy its address, and pass it to
+# `create`. The factory instantiates the template with NO constructor
+# args, so any contract without a required constructor works.
+#
+# The factory chooses each child's salt three ways (auto counter / u64
+# key / string name) and reaches children three ways (by key / by name /
+# by raw address).
+
+[contract]
+name        = "pyde-template"
+version     = "0.1.0"
+description = "A factory: mints child contracts (auto / u64 / string salts) and drives them by key, name, or address."
+type        = "contract"
+
+[contract.lang]
+language = "as"
+output   = "build/contract.wasm"
+
+[contract.lang.toolchain]
+asc_version = "0.28.0"
+
+[deploy]
+gas_limit = 10_000_000
+gas_price = "auto"
+
+[network.default]
+name = "devnet"
+
+[network.devnet]
+rpc_url  = "http://127.0.0.1:9933"
+chain_id = 31337
+
+[state]
+schema = [
+    # AUTO salt counter — `create` salts each child with this, then bumps it.
+    { name = "next_key", type = "uint64" },
+    # Total children minted.
+    { name = "created",  type = "uint64" },
+    # u64-keyed registry: auto + explicit-key children (getPair by key).
+    { name = "children", type = "map", keys = ["uint64"], value = "address" },
+    # string-keyed registry: named children (getPair by name).
+    { name = "named",    type = "map", keys = ["string"],  value = "address" },
+]
+
+# ─── create — choose the salt ───
+
+# AUTO salt: no salt to manage; each call takes the next key.
+[functions.create]
+attributes = ["entry"]
+inputs     = ["address"]
+outputs    = ["address"]
+
+# Explicit u64 salt key (same key → same child, forever).
+[functions.create_with_key]
+attributes = ["entry"]
+inputs     = ["address", "uint64"]
+outputs    = ["address"]
+
+# String salt key (a name, a market pair).
+[functions.create_named]
+attributes = ["entry"]
+inputs     = ["address", "string"]
+outputs    = ["address"]
+
+# ─── look up ───
+
+[functions.child_of]
+attributes = ["entry", "view"]
+inputs     = ["uint64"]
+outputs    = ["address"]
+
+[functions.child_of_name]
+attributes = ["entry", "view"]
+inputs     = ["string"]
+outputs    = ["address"]
+
+[functions.next_key]
+attributes = ["entry", "view"]
+inputs     = []
+outputs    = ["uint64"]
+
+[functions.created]
+attributes = ["entry", "view"]
+inputs     = []
+outputs    = ["uint64"]
+
+# ─── interact — reach a child ───
+
+# By u64 key: look up, then cross-call the child's `increment`.
+[functions.bump]
+attributes = ["entry"]
+inputs     = ["uint64"]
+outputs    = ["uint64"]
+
+# By string name.
+[functions.bump_named]
+attributes = ["entry"]
+inputs     = ["string"]
+outputs    = ["uint64"]
+
+# By raw address — call any child directly, no lookup.
+[functions.bump_at]
+attributes = ["entry"]
+inputs     = ["address"]
+outputs    = ["uint64"]

@@ -135,7 +135,6 @@ function walkProof(leaf: Bytes32, proof: StaticArray<u8>): Bytes32 {
 /// Record the deployer as admin. A second call reverts, since the admin
 /// slot is only zero before the first.
 @entry
-@mutating
 export function init(): void {
   if (!equals32(storage.admin.read(), newAddress())) {
     revertStr("merkle: already initialized");
@@ -160,7 +159,6 @@ export function fund(): void {
 /// Commit the merkle root. Admin only, and only once: the root locks on
 /// first write so the allocation cannot be swapped after claims begin.
 @entry
-@mutating
 export function set_root(root: Bytes32): void {
   const admin = storage.admin.read();
   if (equals32(admin, newAddress())) {
@@ -182,7 +180,6 @@ export function set_root(root: Bytes32): void {
 /// address inside the leaf, so nobody can claim on another's behalf or
 /// redirect a payout.
 @entry
-@mutating
 export function claim(amount: u128, proof: StaticArray<u8>): void {
   if (!storage.root_set.read()) {
     revertStr("RootNotSet");

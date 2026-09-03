@@ -98,7 +98,6 @@ function vestedAt(t: u64): u128 {
 // - `cliff exceeds duration` — past `start + duration` the vested amount is
 //   `total` regardless of cliff, so a longer cliff is a config error.
 @entry
-@mutating
 export function configure(
   beneficiary: Address,
   total: u128,
@@ -162,7 +161,6 @@ export function fund(): void {
 //   state change rolls back atomically with the revert, so `released` does
 //   not advance and a later topped-up call recomputes the same payout.
 @entry
-@mutating
 export function release(): u128 {
   if (!storage.configured.read()) {
     revertStr("vesting: not configured");
