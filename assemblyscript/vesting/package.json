@@ -1,7 +1,7 @@
 {
   "name": "pyde-template",
   "version": "0.1.0",
-  "description": "A minimal Pyde contract scaffolded by `otigen init --lang as`.",
+  "description": "Linear vesting with cliff: the canonical Pyde time-locked allocation example.",
   "private": true,
   "scripts": {
     "build": "asc assembly/index.ts --config asconfig.json --target release"
