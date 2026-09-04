@@ -35,7 +35,7 @@ import {
   ERR_CHILD_ADDRESS_TAKEN,
   ERR_TEMPLATE_NOT_CONTRACT,
 } from "@pyde-net/host/assembly";
-import { storage } from "./pyde.storage.generated";
+import { storage } from "./generated/pyde.storage.generated";
 
 // ─────────────────────────────────────────────────────────────────────
 // Salt derivation

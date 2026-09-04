@@ -18,7 +18,7 @@
 // sides rather than shipping a contract that decodes calldata one way
 // and reads it another.
 
-import { storage } from "./pyde.storage.generated";
+import { storage } from "./generated/pyde.storage.generated";
 
 // `@entry` makes a function chain-facing. On its own it is MUTATING,
 // exactly like Rust's `#[pyde::entry]` — mutating is the default, so
