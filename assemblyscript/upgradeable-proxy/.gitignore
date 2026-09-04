@@ -2,3 +2,6 @@
 /build/
 /artifacts/
 .DS_Store
+
+# Regenerated from otigen.toml on every build.
+/assembly/generated/

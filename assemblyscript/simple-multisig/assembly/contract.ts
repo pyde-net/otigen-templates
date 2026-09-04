@@ -46,8 +46,8 @@ import {
   revertStr,
   writeU64LE,
 } from "@pyde-net/host/assembly";
-import { storage } from "./pyde.storage.generated";
-import { events } from "./pyde.events.generated";
+import { storage } from "./generated/pyde.storage.generated";
+import { events } from "./generated/pyde.events.generated";
 
 /// Registered signer count. Three keeps the contract small and lets the
 /// per-signer storage layout stay hard-coded.

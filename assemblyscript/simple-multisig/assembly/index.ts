@@ -14,7 +14,7 @@
 import { abort as sdkAbort } from "@pyde-net/host/assembly/abort";
 
 // The generated entry points.
-export * from "./pyde.generated";
+export * from "./generated/pyde.generated";
 
 // Local, non-exported abort shim so asconfig's `--use abort=...`
 // resolves to the SDK handler, which routes AssemblyScript's overflow

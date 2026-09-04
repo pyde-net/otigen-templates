@@ -39,8 +39,8 @@ import {
   tryTransfer,
   revertStr,
 } from "@pyde-net/host/assembly";
-import { storage } from "./pyde.storage.generated";
-import { events } from "./pyde.events.generated";
+import { storage } from "./generated/pyde.storage.generated";
+import { events } from "./generated/pyde.events.generated";
 
 /// Domain-separation tag for leaf hashing: "PYDE_LEAF", 9 bytes.
 const LEAF_TAG: StaticArray<u8> = [0x50, 0x59, 0x44, 0x45, 0x5f, 0x4c, 0x45, 0x41, 0x46];

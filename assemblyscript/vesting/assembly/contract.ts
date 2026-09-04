@@ -28,8 +28,8 @@ import {
 } from "@pyde-net/host/assembly";
 import { transfer } from "@pyde-net/host/assembly/raw";
 import { u128ToBytesLE } from "@pyde-net/host/assembly";
-import { storage } from "./pyde.storage.generated";
-import { events } from "./pyde.events.generated";
+import { storage } from "./generated/pyde.storage.generated";
+import { events } from "./generated/pyde.events.generated";
 
 // ─────────────────────────────────────────────────────────────────────
 // Helpers

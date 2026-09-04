@@ -32,8 +32,8 @@ import {
   newAddress,
   revertStr,
 } from "@pyde-net/host/assembly";
-import { storage } from "./pyde.storage.generated";
-import { events } from "./pyde.events.generated";
+import { storage } from "./generated/pyde.storage.generated";
+import { events } from "./generated/pyde.events.generated";
 
 // ─── Protocol constants (PIP-0005 §3) ─────────────────────────────────
 

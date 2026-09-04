@@ -7,7 +7,7 @@
   "sdk": {
     "go": "v0.1.0-alpha.15",
     "rust": "0.1.0-alpha.14",
-    "assemblyscript": "0.1.0-alpha.17"
+    "assemblyscript": "0.1.0-alpha.18"
   },
   "templates": [
     {

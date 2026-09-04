@@ -33,8 +33,8 @@ import {
   revertStr,
   ERR_INVALID_FUNCTION_NAME,
 } from "@pyde-net/host/assembly";
-import { storage } from "./pyde.storage.generated";
-import { events } from "./pyde.events.generated";
+import { storage } from "./generated/pyde.storage.generated";
+import { events } from "./generated/pyde.events.generated";
 
 // ─────────────────────────────────────────────────────────────────────
 // Admin
